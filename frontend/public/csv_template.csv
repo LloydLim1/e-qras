@@ -1,0 +1,8 @@
+# NOTE: ALL DATA BELOW ARE SAMPLES ONLY.
+# REMOVE THE SAMPLE DATA ROWS BEFORE UPLOADING.
+# ENSURE YOU FOLLOW THE REQUIRED COLUMN HEADERS STRICTLY.
+lrn,first_name,last_name,email,parent_email,gender,grade_level,section
+136827130141,Juan,Dela Cruz,juan.delacruz@example.com,parent1@example.com,male,Grade 11,Section A
+104830070008,Maria,Santos,maria.santos@example.com,parent2@example.com,female,Grade 11,Section A
+104835140123,Pedro,Reyes,pedro.reyes@example.com,parent3@example.com,male,Grade 12,Section B
+136787140286,Ana,Garcia,ana.garcia@example.com,parent4@example.com,female,Grade 12,Section B
