@@ -372,9 +372,9 @@ body.page-ready .app-container {
 .filters-card {
     background-color: #ffffff;
     border-radius: 12px;
-    padding: 24px;
-    margin: 40px auto;
-    max-width: 400px;
+    padding: 24px 24px 32px; /* Increased padding-bottom */
+    margin: 24px 0 32px; /* Adjusted margin for dashboard alignment */
+    max-width: 100%; /* Make it full width for reports dashboard */
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
     border: 1px solid #f0f0f0;
 }
@@ -409,6 +409,7 @@ body.page-ready .app-container {
     position: relative;
     display: flex;
     align-items: center;
+    z-index: 50; /* Ensure dropdowns stay on top */
 }
 
 .filter-input-wrapper i {
@@ -3901,4 +3902,48 @@ body.page-ready .app-container {
 
 .print-only {
     display: none;
+}
+
+/* Reports Specific Enhancements */
+.back-btn {
+    display: inline-flex;
+    align-items: center;
+    padding: 8px 16px;
+    background-color: white;
+    color: #374151;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.back-btn:hover:not(:disabled) {
+    background-color: #f9fafb;
+    border-color: #860108;
+    color: #860108;
+}
+
+.generate-summary-btn {
+    display: inline-flex;
+    align-items: center;
+    padding: 8px 16px;
+    background-color: #860108;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.generate-summary-btn:hover:not(:disabled) {
+    background-color: #a0010a;
+    box-shadow: 0 4px 12px rgba(134, 1, 8, 0.2);
+}
+
+.report-row:hover td {
+    background-color: #f9fafb !important;
 }
