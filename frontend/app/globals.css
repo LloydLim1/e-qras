@@ -196,6 +196,7 @@ body.page-ready .app-container {
     border: none;
     cursor: pointer;
     outline: none;
+    text-decoration: none;
 }
 
 .nav-button:hover {

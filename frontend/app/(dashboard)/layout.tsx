@@ -10,7 +10,7 @@ import DashboardAuthGuard from '@/components/DashboardAuthGuard';
 const NAV_ITEMS = [
   { href: '/dashboard', label: 'Dashboard', icon: 'fa-solid fa-chart-line' },
   { href: '/attendance', label: 'Attendance', icon: 'fa-solid fa-clipboard-check' },
-  { href: '/add-person', label: 'Add Person', icon: 'fa-solid fa-user-plus' },
+  { href: '/user-management', label: 'Users', pageTitle: 'User Management', icon: 'fa-solid fa-users-gear' },
   { href: '/import', label: 'Import', icon: 'fa-solid fa-file-import' },
   { href: '/my-section', label: 'My Section', icon: 'fa-solid fa-users' },
   { href: '/qr-scanner', label: 'QR Scanner', icon: 'fa-solid fa-qrcode' },
@@ -25,16 +25,19 @@ export default function DashboardLayout({ children }) {
   const [userName, setUserName] = useState('User');
   const [userRole, setUserRole] = useState('Admin');
   const [userProfileImage, setUserProfileImage] = useState<string | null>(null);
+  const [advisoryClass, setAdvisoryClass] = useState<string | null>(null);
 
   useEffect(() => {
     const syncProfile = () => {
       const storedName = localStorage.getItem('userName');
       const storedRole = localStorage.getItem('userRole');
       const storedProfileImage = localStorage.getItem('userProfileImage');
+      const storedAdvisory = localStorage.getItem('advisoryClass');
 
       if (storedName) setUserName(storedName);
       if (storedRole) setUserRole(storedRole);
       setUserProfileImage(storedProfileImage || null);
+      setAdvisoryClass(storedAdvisory || null);
     };
 
     syncProfile();
@@ -47,17 +50,33 @@ export default function DashboardLayout({ children }) {
     };
   }, []);
 
+  const filteredNavItems = useMemo(() => {
+    return NAV_ITEMS.filter(item => {
+      if (item.href === '/my-section') {
+        const role = userRole.toLowerCase();
+        if (role === 'teacher') return true;
+        if (role === 'admin') {
+          return advisoryClass && advisoryClass.trim() !== '' && advisoryClass !== '-';
+        }
+        return false;
+      }
+      // Assuming Guards shouldn't see certain things, but the user only requested 'My Section' condition.
+      return true;
+    });
+  }, [userRole, advisoryClass]);
+
   const activeItem = useMemo(() => {
-    const exact = NAV_ITEMS.find((item) => item.href === pathname);
+    const exact = filteredNavItems.find((item) => item.href === pathname);
     if (exact) return exact;
-    const nested = NAV_ITEMS.find((item) => pathname?.startsWith(item.href + '/'));
-    return nested || NAV_ITEMS[0];
-  }, [pathname]);
+    const nested = filteredNavItems.find((item) => pathname?.startsWith(item.href + '/'));
+    return nested || filteredNavItems[0];
+  }, [pathname, filteredNavItems]);
 
   function handleLogout() {
     localStorage.removeItem('userRole');
     localStorage.removeItem('userName');
     localStorage.removeItem('userId');
+    localStorage.removeItem('advisoryClass');
     sessionStorage.removeItem('resetEmail');
     sessionStorage.removeItem('resetToken');
     router.replace('/login');
@@ -82,7 +101,7 @@ export default function DashboardLayout({ children }) {
           </div>
 
           <nav className="navigation">
-            {NAV_ITEMS.map((item, index) => (
+            {filteredNavItems.map((item, index) => (
               <Link
                 key={item.href}
                 href={item.href}
@@ -121,7 +140,7 @@ export default function DashboardLayout({ children }) {
           <header className="content-header">
             <div className="header-info">
               <h2 className="page-title" id="pageTitle">
-                {activeItem?.label || 'Dashboard'}
+                {activeItem?.pageTitle || activeItem?.label || 'Dashboard'}
               </h2>
             </div>
 

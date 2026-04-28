@@ -38,12 +38,27 @@ export default function LoginPage() {
             if (queryError) throw queryError;
             if (!user) throw new Error('User not found.');
 
+            if (user.status === 'Deactivated') {
+                throw new Error('This account has been deactivated. Please contact an administrator.');
+            }
+
             const isMatch = dcodeIO.bcrypt.compareSync(password, user.password);
             if (!isMatch) throw new Error('Incorrect password.');
+
+            // Update status to 'Active' on first successful login if invited
+            if (user.status === 'Invited' || user.status === 'Pending') {
+                await client.from('users').update({ status: 'Active' }).eq('id', user.id);
+            }
 
             localStorage.setItem('userRole', user.role || 'admin');
             localStorage.setItem('userName', user.full_name || user.username);
             localStorage.setItem('userId', user.id);
+            // Cache advisory_class so attendance page and sidebar can filter
+            if (user.advisory_class) {
+                localStorage.setItem('advisoryClass', user.advisory_class);
+            } else {
+                localStorage.removeItem('advisoryClass');
+            }
 
             window.location.href = '/dashboard';
         } catch (err) {

@@ -1,4 +1,4 @@
-﻿import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import jwt from 'jsonwebtoken';
@@ -329,6 +329,49 @@ export class ApiService {
         error instanceof Error ? error.message : 'Message could not be sent. Unknown mailer error.';
 
       this.logger.error(`Attendance email failed for ${payload.parentEmail}: ${message}`);
+      return {
+        success: false,
+        error: `Message could not be sent. Mailer Error: ${message}`
+      };
+    }
+  }
+
+  async sendInviteEmail(email: string, name: string, username: string, passwordStr: string) {
+    try {
+      if (!this.smtpUser || !this.smtpPass) {
+        this.logger.error('SMTP credentials are not configured.');
+        return { success: false, error: 'SMTP is not configured.' };
+      }
+
+      const transporter = this.createTransporter();
+
+      await transporter.sendMail({
+        from: `${this.smtpFromName} <${this.smtpFromEmail}>`,
+        to: email,
+        subject: `Welcome to E-QRAS, ${name}!`,
+        html: `
+          <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #ddd; border-radius: 10px; color: #333;">
+              <h2 style="color: #860108;">Welcome to E-QRAS!</h2>
+              <p>Dear ${name},</p>
+              <p>You have been invited to join the Emmaus QR Attendance System (E-QRAS).</p>
+              <div style="background: #f9f9f9; padding: 15px; border-radius: 8px; margin: 20px 0;">
+                  <p style="margin: 5px 0;"><strong>Username:</strong> ${username}</p>
+                  <p style="margin: 5px 0;"><strong>Password:</strong> ${passwordStr}</p>
+              </div>
+              <p>Please log in using these credentials. We recommend changing your password after your first login.</p>
+              <p>Thank you,<br/>The E-QRAS Team</p>
+              <hr style="border: 0; border-top: 1px solid #eee;" />
+              <p style="font-size: 12px; color: #666;">This is an automated message. Please do not reply.</p>
+          </div>
+        `
+      });
+
+      return { success: true };
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Message could not be sent. Unknown mailer error.';
+
+      this.logger.error(`Invite email failed for ${email}: ${message}`);
       return {
         success: false,
         error: `Message could not be sent. Mailer Error: ${message}`

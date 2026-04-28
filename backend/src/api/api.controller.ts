@@ -1,4 +1,4 @@
-﻿import { Body, Controller, Get, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, Post, Query } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { ApiService } from './api.service';
 import {
@@ -6,7 +6,8 @@ import {
   GenerateTokenDto,
   StudentsQueryDto,
   SendAttendanceDto,
-  SendOtpDto
+  SendOtpDto,
+  SendInviteDto
 } from './api.dto';
 
 @Controller('api')
@@ -52,5 +53,16 @@ export class ApiController {
       status: body.status,
       timeIn: body.time_in
     });
+  }
+
+  @Post(['send_invite_email.php', 'send-invite-email'])
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  async sendInviteEmail(@Body() body: SendInviteDto) {
+    return this.apiService.sendInviteEmail(
+      body.email,
+      body.name,
+      body.username,
+      body.password
+    );
   }
 }
