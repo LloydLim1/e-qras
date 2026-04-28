@@ -123,7 +123,7 @@ export default function ReportsApp() {
                     const key = `${grade}|${section}`;
                     if (!sectionsMap[key]) {
                         const advisoryKey = `${grade} - ${section}`.toLowerCase().replace(/\s+/g, ' ');
-                        const teacher = tmap[advisoryKey] || { name: 'Not Assigned', email: '' };
+                        const teacher = tmap[advisoryKey] || { name: '-', email: '' };
                         sectionsMap[key] = { key, grade, section, adviser: teacher.name, adviserEmail: teacher.email, label: `${grade} - ${section}` };
                     }
                 });
@@ -225,20 +225,27 @@ export default function ReportsApp() {
         [sectionStudents, studentRecordMap]
     );
 
-        return { 
-            present, 
-            late, 
-            absent, 
-            total: sectionStudents.length,
-            isEmpty: (present + late + absent) === 0
-        };
+    const donutStats = useMemo(() => {
+        let present = 0, late = 0, absent = 0;
+        attendanceRecords.forEach(r => {
+            if (r.status === 'Present') present++;
+            else if (r.status === 'Late') late++;
+            else if (r.status === 'Absent') absent++;
+        });
+        return { present, late, absent, total: sectionStudents.length };
     }, [attendanceRecords, sectionStudents]);
 
-        const allZeros = data.every(v => v === 0);
+    const weeklyLineData = useMemo(() => {
+        if (!monthFilter) return { labels: [], data: [] };
+        const [year, month] = monthFilter.split('-').map(Number);
+        const weeks = getMonthWeeks(year, month);
+        const presentByDate = {};
+        attendanceRecords.forEach(r => {
+            if (r.status === 'Present') presentByDate[r.scan_date] = (presentByDate[r.scan_date] || 0) + 1;
+        });
         return {
             labels: weeks.map((_, i) => `Week ${i + 1}`),
-            data,
-            allZeros
+            data: weeks.map(week => week.reduce((sum, date) => sum + (date ? (presentByDate[date] || 0) : 0), 0))
         };
     }, [attendanceRecords, monthFilter]);
 
@@ -279,26 +286,16 @@ export default function ReportsApp() {
             }
         };
 
-        const chartData = donutStats.isEmpty 
-            ? [1] 
-            : [donutStats.present, donutStats.late, donutStats.absent];
-        const chartColors = donutStats.isEmpty 
-            ? ['#f3f4f6'] 
-            : ['#4ADE80', '#FBBF24', '#F87171'];
-        const chartLabels = donutStats.isEmpty 
-            ? ['No Data'] 
-            : ['Present', 'Late', 'Absent'];
-
         donutInstance.current = new Chart(donutRef.current, {
             type: 'doughnut',
             plugins: [centerPlugin],
             data: {
-                labels: chartLabels,
+                labels: ['Present', 'Late', 'Absent'],
                 datasets: [{
-                    data: chartData,
-                    backgroundColor: chartColors,
+                    data: [donutStats.present, donutStats.late, donutStats.absent],
+                    backgroundColor: ['#16a34a', '#f59e0b', '#dc2626'],
                     borderWidth: 0,
-                    hoverOffset: donutStats.isEmpty ? 0 : 6
+                    hoverOffset: 6
                 }]
             },
             options: {
@@ -308,26 +305,7 @@ export default function ReportsApp() {
                 plugins: {
                     legend: {
                         position: 'bottom',
-                        labels: { 
-                            padding: 16, 
-                            font: { size: 12, family: 'Poppins, sans-serif' },
-                            // Ensure legend matches chart colors
-                            generateLabels: (chart) => {
-                                const data = chart.data;
-                                if (data.labels.length && data.datasets.length) {
-                                    return data.labels.map((label, i) => ({
-                                        text: label,
-                                        fillStyle: data.datasets[0].backgroundColor[i],
-                                        hidden: false,
-                                        index: i
-                                    }));
-                                }
-                                return [];
-                            }
-                        }
-                    },
-                    tooltip: {
-                        enabled: !donutStats.isEmpty
+                        labels: { padding: 16, font: { size: 12, family: 'Poppins, sans-serif' } }
                     }
                 }
             }
@@ -364,12 +342,7 @@ export default function ReportsApp() {
                 maintainAspectRatio: false,
                 plugins: { legend: { display: false } },
                 scales: {
-                    y: { 
-                        beginAtZero: true, 
-                        grid: { color: '#f3f4f6' }, 
-                        ticks: { font: { family: 'Poppins, sans-serif', size: 11 } },
-                        max: weeklyLineData.allZeros ? 10 : undefined
-                    },
+                    y: { beginAtZero: true, grid: { color: '#f3f4f6' }, ticks: { font: { family: 'Poppins, sans-serif', size: 11 } } },
                     x: { grid: { display: false }, ticks: { font: { family: 'Poppins, sans-serif', size: 11 } } }
                 }
             }
@@ -512,7 +485,7 @@ export default function ReportsApp() {
             return;
         }
         setEmailLoading(true);
-        setEmailStatus({ type: 'info', msg: `Generating report and sending to ${activeSectionInfo.adviser}...` });
+        setEmailStatus(null);
         try {
             const csvContent = generateCsvContent();
             const base64 = btoa(unescape(encodeURIComponent(csvContent)));
@@ -603,19 +576,7 @@ export default function ReportsApp() {
                         <div className="filter-item" style={{ flex: 2 }}>
                             <label className="filter-label">Assigned Teacher</label>
                             <div style={{ paddingTop: 8 }}>
-                                <span style={{ 
-                                    display: 'inline-flex', 
-                                    alignItems: 'center', 
-                                    gap: 6, 
-                                    background: activeSectionInfo.adviser === 'Not Assigned' ? '#f3f4f6' : '#fef2f2', 
-                                    color: activeSectionInfo.adviser === 'Not Assigned' ? '#6b7280' : '#860108', 
-                                    border: `1px solid ${activeSectionInfo.adviser === 'Not Assigned' ? '#e5e7eb' : '#fecaca'}`, 
-                                    borderRadius: 999, 
-                                    padding: '4px 14px', 
-                                    fontSize: 13, 
-                                    fontWeight: 600,
-                                    fontStyle: activeSectionInfo.adviser === 'Not Assigned' ? 'italic' : 'normal'
-                                }}>
+                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: '#fef2f2', color: '#860108', border: '1px solid #fecaca', borderRadius: 999, padding: '4px 14px', fontSize: 13, fontWeight: 600 }}>
                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
                                     {activeSectionInfo.adviser}
                                 </span>
@@ -636,8 +597,8 @@ export default function ReportsApp() {
                     <div style={{ height: 260 }}>
                         <canvas ref={donutRef}></canvas>
                     </div>
-                    {!attendanceLoading && donutStats.isEmpty && (
-                        <p style={{ textAlign: 'center', color: '#9ca3af', fontSize: 13, marginTop: 8 }}>Skeleton view: No data for this month</p>
+                    {!attendanceLoading && attendanceRecords.length === 0 && (
+                        <p style={{ textAlign: 'center', color: '#9ca3af', fontSize: 13, marginTop: 8 }}>No records for this period</p>
                     )}
                 </div>
 
@@ -667,9 +628,7 @@ export default function ReportsApp() {
                         </div>
                         <div className="header-stat-item">
                             <span className="header-stat-label">Teacher:</span>
-                            <span className="header-stat-value" style={{ fontStyle: activeSectionInfo.adviser === 'Not Assigned' ? 'italic' : 'normal', color: activeSectionInfo.adviser === 'Not Assigned' ? '#9ca3af' : 'inherit' }}>
-                                {activeSectionInfo.adviser}
-                            </span>
+                            <span className="header-stat-value">{activeSectionInfo.adviser}</span>
                         </div>
                         <div className="header-stat-item">
                             <span className="header-stat-label">Students:</span>
@@ -737,10 +696,10 @@ export default function ReportsApp() {
                     <table className="attendance-table" style={{ tableLayout: 'fixed' }}>
                         <thead>
                             <tr>
-                                <th style={{ width: '40%', textAlign: 'left', paddingLeft: 20, color: '#860108' }}>Student Name</th>
-                                <th style={{ width: '15%', color: '#860108' }}>Gender</th>
-                                <th style={{ width: '20%', color: '#860108' }}>Total Absences</th>
-                                <th style={{ width: '20%', color: '#860108' }}>Total Lates</th>
+                                <th style={{ width: '40%', textAlign: 'left', paddingLeft: 20 }}>Student Name</th>
+                                <th style={{ width: '15%' }}>Gender</th>
+                                <th style={{ width: '20%' }}>Total Absences</th>
+                                <th style={{ width: '20%' }}>Total Lates</th>
                                 <th style={{ width: '5%' }}></th>
                             </tr>
                         </thead>
