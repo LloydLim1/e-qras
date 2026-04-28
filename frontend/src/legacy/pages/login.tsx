@@ -1,5 +1,6 @@
 // @ts-nocheck
 import React from 'react';
+import { createClient } from '@/utils/supabase/client';
 
 export default function LoginPage() {
     const [username, setUsername] = React.useState('');
@@ -19,43 +20,56 @@ export default function LoginPage() {
         setError('');
         setLoading(true);
 
-        const client = window.supabaseClient;
-        if (!client) {
-            setError('Database connection error. Check your configuration.');
-            setLoading(false);
-            return;
-        }
+        const supabase = createClient();
 
         try {
-            const usernameInput = username.trim();
-            const safeInput = usernameInput.replaceAll('\\', '\\\\').replaceAll('"', '\\"');
-            const { data: user, error: queryError } = await client
-                .from('users')
-                .select('*')
-                .or(`username.eq."${safeInput}",email.eq."${safeInput}"`)
-                .maybeSingle();
-
-            if (queryError) throw queryError;
-            if (!user) throw new Error('User not found.');
-
-            if (user.status === 'Deactivated') {
-                throw new Error('This account has been deactivated. Please contact an administrator.');
+            let loginEmail = username.trim();
+            
+            // If it doesn't look like an email, try to find the email by username
+            if (!loginEmail.includes('@')) {
+                const { data: userData, error: userError } = await supabase
+                    .from('users')
+                    .select('email')
+                    .eq('username', loginEmail)
+                    .maybeSingle();
+                
+                if (userData?.email) {
+                    loginEmail = userData.email;
+                }
             }
 
-            const isMatch = dcodeIO.bcrypt.compareSync(password, user.password);
-            if (!isMatch) throw new Error('Incorrect password.');
+            const { data, error: authError } = await supabase.auth.signInWithPassword({
+                email: loginEmail,
+                password: password,
+            });
+
+            if (authError) throw authError;
+
+            const user = data.user;
+            const metadata = user.user_metadata || {};
 
             // Update status to 'Active' on first successful login if invited
-            if (user.status === 'Invited' || user.status === 'Pending') {
-                await client.from('users').update({ status: 'Active' }).eq('id', user.id);
+            // We can do this via an RPC or a protected backend route if needed, 
+            // but for now let's maintain the existing flow via client if possible.
+            // Note: RLS must allow this update.
+            if (metadata.status === 'Invited' || metadata.status === 'Pending') {
+                await supabase.from('users').update({ status: 'Active' }).eq('id', metadata.public_user_id || user.id);
             }
 
-            localStorage.setItem('userRole', user.role || 'admin');
-            localStorage.setItem('userName', user.full_name || user.username);
-            localStorage.setItem('userId', user.id);
-            // Cache advisory_class so attendance page and sidebar can filter
-            if (user.advisory_class) {
-                localStorage.setItem('advisoryClass', user.advisory_class);
+            // Still using localStorage for now to maintain compatibility with existing components
+            localStorage.setItem('userRole', metadata.role || 'admin');
+            localStorage.setItem('userName', metadata.name || user.email);
+            localStorage.setItem('userId', metadata.public_user_id || user.id);
+            
+            // Handle advisory class - might need to fetch this from public.users if not in metadata
+            const { data: publicUser } = await supabase
+                .from('users')
+                .select('advisory_class')
+                .eq('id', metadata.public_user_id || user.id)
+                .single();
+
+            if (publicUser?.advisory_class) {
+                localStorage.setItem('advisoryClass', publicUser.advisory_class);
             } else {
                 localStorage.removeItem('advisoryClass');
             }

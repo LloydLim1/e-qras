@@ -6,6 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import BodyClassManager from '@/components/BodyClassManager';
 import DashboardAuthGuard from '@/components/DashboardAuthGuard';
+import { createClient } from '@/utils/supabase/client';
 
 const NAV_ITEMS = [
   { href: '/dashboard', label: 'Dashboard', icon: 'fa-solid fa-chart-line' },
@@ -72,7 +73,9 @@ export default function DashboardLayout({ children }) {
     return nested || filteredNavItems[0];
   }, [pathname, filteredNavItems]);
 
-  function handleLogout() {
+  async function handleLogout() {
+    const supabase = createClient();
+    await supabase.auth.signOut();
     localStorage.removeItem('userRole');
     localStorage.removeItem('userName');
     localStorage.removeItem('userId');

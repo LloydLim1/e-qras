@@ -1,5 +1,6 @@
 // @ts-nocheck
 import React from 'react';
+import { createClient } from '@/utils/supabase/client';
 
 /* Auto-extracted from settings.php */
 
@@ -176,7 +177,7 @@ async function initSettingsPage() {
 
     window.__settingsPageInitialized = true;
 
-    const supabase = window.supabaseClient;
+    const supabase = createClient();
     const userId = localStorage.getItem('userId');
 
     if (!supabase) {
