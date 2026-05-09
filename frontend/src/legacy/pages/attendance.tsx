@@ -18,7 +18,7 @@ export default function AttendanceApp() {
     );
     // null = no filter (admin/guard); string[] = teacher's advisory sections
     const [teacherAdvisoryClasses, setTeacherAdvisoryClasses] = React.useState(null);
-    const isTeacher = (localStorage.getItem('userRole') || '').toLowerCase() === 'teacher';
+    const [isTeacher, setIsTeacher] = React.useState(false);
     // Dates that actually have attendance records
     const [datesWithRecords, setDatesWithRecords] = React.useState([]);
 
@@ -65,6 +65,8 @@ export default function AttendanceApp() {
     // ─── Load summary data on mount ───────────────────────────────────────────
     React.useEffect(() => {
         let mounted = true;
+        const teacherFlag = (localStorage.getItem('userRole') || '').toLowerCase() === 'teacher';
+        if (mounted) setIsTeacher(teacherFlag);
         const loadData = async () => {
             setLoading(true);
             setError('');
@@ -103,7 +105,7 @@ export default function AttendanceApp() {
 
                 // ── Teacher section filter ────────────────────────────────
                 const userId = localStorage.getItem('userId') || '';
-                if (isTeacher && userId) {
+                if (teacherFlag && userId) {
                     let advisoryStr = localStorage.getItem('advisoryClass') || '';
                     if (!advisoryStr) {
                         // Fallback: fetch from DB for sessions predating this feature
