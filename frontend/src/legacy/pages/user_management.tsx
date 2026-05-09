@@ -1,7 +1,27 @@
 // @ts-nocheck
 import React from 'react';
+import { createClient } from '@/utils/supabase/client';
 
 /* User Management page — React-driven with Data Table, Modal, and QRs */
+
+async function apiFetch(path, options = {}) {
+    const supabase = createClient();
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token;
+    const headers = {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(options.headers || {}),
+    };
+    const res = await fetch(path, { ...options, headers });
+    let data = null;
+    try { data = await res.json(); } catch (_) { /* ignore */ }
+    if (!res.ok) {
+        const message = (data && (data.error || data.message)) || `Request failed (${res.status})`;
+        throw new Error(message);
+    }
+    return data || {};
+}
 
 // ─── Custom multi-select dropdown ────────────────────────────────────────────
 function MultiSelectDropdown({ options, selected, onChange, placeholder }) {
@@ -200,50 +220,37 @@ export default function UserManagementApp() {
         e.preventDefault();
         if (!personType || !firstName || !lastName || !email || !birthday || !sex) return setPopupMessage({ type: 'error', text: 'Please fill in all required fields.' });
         if ((personType === 'teacher' || personType === 'admin') && advisoryClasses.length === 0) return setPopupMessage({ type: 'error', text: 'Please select at least one advisory class.' });
-        
-        const client = window.supabaseClient;
+
         setSubmitting(true);
         try {
-            const rawPassword = password || 'password123';
-            const salt = dcodeIO.bcrypt.genSaltSync(10);
-            const hashedPassword = dcodeIO.bcrypt.hashSync(rawPassword, salt);
-            const rawUsername = email.split('@')[0];
-            
-            const personData = {
-                first_name: firstName, last_name: lastName, full_name: `${firstName} ${lastName}`,
-                email, username: rawUsername, password: hashedPassword, phone, birthday, sex,
-                role: personType, created_at: new Date().toISOString(), status: 'Invited',
-                advisory_class: (personType === 'teacher' || personType === 'admin') && advisoryClasses.length > 0 ? advisoryClasses.join(', ') : null
-            };
+            const advisoryStr =
+                (personType === 'teacher' || personType === 'admin') && advisoryClasses.length > 0
+                    ? advisoryClasses.join(', ')
+                    : undefined;
 
-            const { error } = await client.from('users').insert([personData]).select().single();
-            if (error) throw error;
+            const result = await apiFetch('/api/users', {
+                method: 'POST',
+                body: JSON.stringify({
+                    email,
+                    first_name: firstName,
+                    last_name: lastName,
+                    role: personType,
+                    phone: phone || undefined,
+                    birthday: birthday || undefined,
+                    sex: sex || undefined,
+                    advisory_class: advisoryStr,
+                    password: password || undefined,
+                }),
+            });
 
-            // Trigger invite email
-            try {
-                // The frontend might run on a different port, but usually it calls the backend on localhost:3001 or via proxy.
-                // Assuming standard E-QRAS backend runs on port 3001
-                const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-                await fetch(`${API_BASE}/api/send-invite-email`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        email: email,
-                        name: firstName,
-                        username: rawUsername,
-                        password: rawPassword
-                    })
-                });
-            } catch (emailErr) {
-                console.error('Failed to send invite email:', emailErr);
-            }
+            if (result.success === false) throw new Error(result.error || 'Failed to add person.');
 
             setPopupMessage({ type: 'success', text: `Successfully added ${personType}: ${firstName} ${lastName}. An invite email has been sent.` });
             setIsModalOpen(false);
-            fetchUsers(); // Refresh table
+            fetchUsers();
         } catch (err) {
             console.error(err);
-            setPopupMessage({ type: 'error', text: 'Failed to add person. They might already exist.' });
+            setPopupMessage({ type: 'error', text: err.message || 'Failed to add person.' });
         } finally {
             setSubmitting(false);
         }
@@ -296,16 +303,16 @@ export default function UserManagementApp() {
 
     async function resetUserPassword(userId) {
         if (!window.confirm('Are you sure you want to reset this user\'s password to "password123"?')) return;
-        const client = window.supabaseClient;
         try {
-            const salt = dcodeIO.bcrypt.genSaltSync(10);
-            const hashedPassword = dcodeIO.bcrypt.hashSync('password123', salt);
-            const { error } = await client.from('users').update({ password: hashedPassword }).eq('id', userId);
-            if (error) throw error;
+            const result = await apiFetch(`/api/users/${userId}/reset-password`, {
+                method: 'POST',
+                body: JSON.stringify({}),
+            });
+            if (result.success === false) throw new Error(result.error || 'Failed to reset password.');
             setPopupMessage({ type: 'success', text: 'Password reset successfully to "password123".' });
         } catch (err) {
             console.error('Error resetting password:', err);
-            setPopupMessage({ type: 'error', text: 'Failed to reset password.' });
+            setPopupMessage({ type: 'error', text: err.message || 'Failed to reset password.' });
         }
     }
 

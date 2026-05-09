@@ -34,9 +34,8 @@ export class CompleteResetDto {
 
   @IsString()
   @IsNotEmpty()
-  @MinLength(20)
-  @MaxLength(255)
-  @Matches(/^\$2[aby]\$.+/, { message: 'Password must be a bcrypt hash.' })
+  @MinLength(8)
+  @MaxLength(128)
   newPassword!: string;
 }
 
@@ -282,4 +281,59 @@ export class LoginDto {
   @MinLength(4)
   @MaxLength(128)
   password!: string;
+}
+
+// ─── User-management DTOs ─────────────────────────────────────────────────────
+
+export class CreateUserDto {
+  @IsEmail()
+  email!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(80)
+  first_name!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(80)
+  last_name!: string;
+
+  @IsString()
+  @IsIn(['admin', 'teacher', 'guard'])
+  role!: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(20)
+  phone?: string;
+
+  @IsOptional()
+  @IsString()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'birthday must be YYYY-MM-DD.' })
+  birthday?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(40)
+  sex?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  advisory_class?: string;
+
+  @IsOptional()
+  @IsString()
+  @MinLength(8)
+  @MaxLength(128)
+  password?: string;
+}
+
+export class ResetUserPasswordDto {
+  @IsOptional()
+  @IsString()
+  @MinLength(8)
+  @MaxLength(128)
+  newPassword?: string;
 }

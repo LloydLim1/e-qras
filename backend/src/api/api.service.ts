@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import jwt from 'jsonwebtoken';
 import nodemailer, { Transporter } from 'nodemailer';
-import { StudentsQueryDto } from './api.dto';
+import { CreateUserDto, StudentsQueryDto } from './api.dto';
 
 interface ResetPayload {
   userId: string;
@@ -23,6 +23,7 @@ export class ApiService {
   private readonly logger = new Logger(ApiService.name);
   private readonly supabase: SupabaseClient;
   private readonly supabaseRead: SupabaseClient;
+  private readonly supabaseAdmin: SupabaseClient | null;
   private readonly jwtSecret: string;
   private readonly summaryCacheTtlMs = 15_000;
   private studentsSummaryCache: { expiresAt: number; value: any } | null = null;
@@ -48,6 +49,9 @@ export class ApiService {
 
     this.supabase = createClient(supabaseUrl, supabaseAnonKey);
     this.supabaseRead = createClient(supabaseUrl, supabaseServiceRoleKey || supabaseAnonKey);
+    this.supabaseAdmin = supabaseServiceRoleKey
+      ? createClient(supabaseUrl, supabaseServiceRoleKey, { auth: { persistSession: false } })
+      : null;
 
     this.jwtSecret =
       this.configService.get<string>('JWT_SECRET') ||
@@ -246,25 +250,198 @@ export class ApiService {
       return { success: false, error: 'Invalid or expired security token.' };
     }
 
-    if (!/^\$2[aby]\$.+/.test(newPassword)) {
-      return { success: false, error: 'Invalid password format.' };
+    if (!this.supabaseAdmin) {
+      return { success: false, error: 'Server is missing service-role configuration.' };
     }
 
-    const { error } = await this.supabase
+    const { data: publicUser, error: lookupError } = await this.supabaseRead
       .from('users')
-      .update({
-        password: newPassword,
-        otp_code: null,
-        otp_expiry: null
-      })
+      .select('auth_id')
+      .eq('id', payload.userId)
+      .maybeSingle();
+
+    if (lookupError || !publicUser?.auth_id) {
+      this.logger.error(
+        `Password reset lookup failed for user ${payload.userId}: ${lookupError?.message || 'no auth_id'}`
+      );
+      return { success: false, error: 'User account is not linked to an authentication record.' };
+    }
+
+    const { error: updateError } = await this.supabaseAdmin.auth.admin.updateUserById(
+      publicUser.auth_id,
+      { password: newPassword }
+    );
+
+    if (updateError) {
+      this.logger.error(`Password reset failed for user ${payload.userId}: ${updateError.message}`);
+      return { success: false, error: 'Failed to update password.' };
+    }
+
+    await this.supabaseRead
+      .from('users')
+      .update({ otp_code: null, otp_expiry: null })
       .eq('id', payload.userId);
 
-    if (error) {
-      this.logger.error(`Password reset failed for user ${payload.userId}: ${error.message}`);
-      return { success: false, error: 'Failed to update password in database.' };
+    return { success: true };
+  }
+
+  // ─── User-management (admin) ──────────────────────────────────────────────
+  async createUser(dto: CreateUserDto) {
+    if (!this.supabaseAdmin) {
+      return { success: false, error: 'Server is missing service-role configuration.' };
+    }
+
+    const email = dto.email.trim().toLowerCase();
+    const username = email.split('@')[0];
+    const fullName = `${dto.first_name} ${dto.last_name}`.trim();
+    const tempPassword = dto.password || this.generateTempPassword();
+
+    const { data: created, error: createError } =
+      await this.supabaseAdmin.auth.admin.createUser({
+        email,
+        password: tempPassword,
+        email_confirm: true,
+        user_metadata: {
+          name: fullName,
+          role: dto.role,
+        },
+      });
+
+    if (createError || !created?.user) {
+      this.logger.warn(`createUser failed for ${email}: ${createError?.message}`);
+      const message = createError?.message || 'Failed to create authentication user.';
+      const conflict = /already.*registered|already.*exists/i.test(message);
+      return { success: false, error: conflict ? 'A user with this email already exists.' : message };
+    }
+
+    const authUser = created.user;
+
+    const insertPayload: Record<string, unknown> = {
+      first_name: dto.first_name,
+      last_name: dto.last_name,
+      full_name: fullName,
+      email,
+      username,
+      phone: dto.phone || null,
+      birthday: dto.birthday || null,
+      sex: dto.sex || null,
+      role: dto.role,
+      status: 'Invited',
+      advisory_class: dto.advisory_class || null,
+      auth_id: authUser.id,
+    };
+
+    const { data: publicRow, error: insertError } = await this.supabaseRead
+      .from('users')
+      .insert([insertPayload])
+      .select()
+      .single();
+
+    if (insertError || !publicRow) {
+      this.logger.error(
+        `createUser: public.users insert failed for ${email}, rolling back auth user: ${insertError?.message}`
+      );
+      await this.supabaseAdmin.auth.admin.deleteUser(authUser.id).catch((err) => {
+        this.logger.error(`Rollback failed for auth user ${authUser.id}: ${err?.message || err}`);
+      });
+      const code = (insertError as any)?.code;
+      const friendly =
+        code === '23505'
+          ? 'A user with this email or username already exists.'
+          : insertError?.message || 'Failed to create user profile.';
+      return { success: false, error: friendly };
+    }
+
+    await this.supabaseAdmin.auth.admin.updateUserById(authUser.id, {
+      user_metadata: {
+        name: fullName,
+        role: dto.role,
+        public_user_id: publicRow.id,
+      },
+    });
+
+    if (this.smtpUser && this.smtpPass) {
+      await this.sendInviteEmail(email, dto.first_name, username, tempPassword).catch((err) => {
+        this.logger.warn(`Invite email failed for ${email}: ${err?.message || err}`);
+      });
+    }
+
+    return { success: true, data: publicRow };
+  }
+
+  async deleteUser(publicUserId: string | number) {
+    if (!this.supabaseAdmin) {
+      return { success: false, error: 'Server is missing service-role configuration.' };
+    }
+
+    const { data: row, error: lookupError } = await this.supabaseRead
+      .from('users')
+      .select('auth_id')
+      .eq('id', publicUserId)
+      .maybeSingle();
+
+    if (lookupError) {
+      return { success: false, error: lookupError.message };
+    }
+    if (!row) {
+      return { success: false, error: 'User not found.' };
+    }
+
+    if (row.auth_id) {
+      const { error: authError } = await this.supabaseAdmin.auth.admin.deleteUser(row.auth_id);
+      if (authError && !/User not found/i.test(authError.message)) {
+        this.logger.error(`Auth delete failed for user ${publicUserId}: ${authError.message}`);
+        return { success: false, error: authError.message };
+      }
+    }
+
+    const { error: deleteError } = await this.supabaseRead
+      .from('users')
+      .delete()
+      .eq('id', publicUserId);
+
+    if (deleteError) {
+      return { success: false, error: deleteError.message };
     }
 
     return { success: true };
+  }
+
+  async resetUserPassword(publicUserId: string | number, newPassword?: string) {
+    if (!this.supabaseAdmin) {
+      return { success: false, error: 'Server is missing service-role configuration.' };
+    }
+
+    const { data: row, error: lookupError } = await this.supabaseRead
+      .from('users')
+      .select('auth_id, email, first_name')
+      .eq('id', publicUserId)
+      .maybeSingle();
+
+    if (lookupError || !row) {
+      return { success: false, error: lookupError?.message || 'User not found.' };
+    }
+    if (!row.auth_id) {
+      return { success: false, error: 'User is not linked to an authentication record.' };
+    }
+
+    const password = newPassword || 'password123';
+
+    const { error: updateError } = await this.supabaseAdmin.auth.admin.updateUserById(
+      row.auth_id,
+      { password }
+    );
+
+    if (updateError) {
+      return { success: false, error: updateError.message };
+    }
+
+    return { success: true, tempPassword: password };
+  }
+
+  private generateTempPassword(): string {
+    const bytes = require('crypto').randomBytes(12).toString('base64url');
+    return `Tmp_${bytes}`;
   }
 
   async sendOtpEmail(email: string, otp: string) {

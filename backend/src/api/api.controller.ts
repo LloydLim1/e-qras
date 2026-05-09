@@ -1,14 +1,26 @@
-import { Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { ApiService } from './api.service';
 import { SupabaseGuard, Roles, Public } from '../auth/supabase.guard';
 import {
   CompleteResetDto,
+  CreateUserDto,
   GenerateTokenDto,
+  ResetUserPasswordDto,
   StudentsQueryDto,
   SendAttendanceDto,
   SendOtpDto,
-  SendInviteDto
+  SendInviteDto,
 } from './api.dto';
 
 @Controller('api')
@@ -73,5 +85,28 @@ export class ApiController {
       body.username,
       body.password
     );
+  }
+
+  @Post('users')
+  @Roles('admin')
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
+  async createUser(@Body() body: CreateUserDto) {
+    return this.apiService.createUser(body);
+  }
+
+  @Delete('users/:id')
+  @Roles('admin')
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
+  async deleteUser(@Param('id') id: string) {
+    if (!id) throw new BadRequestException('id is required');
+    return this.apiService.deleteUser(id);
+  }
+
+  @Post('users/:id/reset-password')
+  @Roles('admin')
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  async resetUserPassword(@Param('id') id: string, @Body() body: ResetUserPasswordDto) {
+    if (!id) throw new BadRequestException('id is required');
+    return this.apiService.resetUserPassword(id, body.newPassword);
   }
 }
