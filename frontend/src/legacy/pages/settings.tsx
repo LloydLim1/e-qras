@@ -166,7 +166,6 @@ export default function SettingsApp() {
 
 async function initSettingsPage() {
     if (typeof document === 'undefined') return;
-    if (window.__settingsPageInitialized) return;
 
     const requiredIds = ['avatarInput', 'changePictureBtn', 'avatarCropModal', 'cropPreviewFrame', 'cropPreviewImage', 'cropZoomRange'];
     const missing = requiredIds.some((id) => !document.getElementById(id));
@@ -175,17 +174,15 @@ async function initSettingsPage() {
         return;
     }
 
-    window.__settingsPageInitialized = true;
-
     const supabase = createClient();
-    const userId = localStorage.getItem('userId');
 
     if (!supabase) {
         console.error('Supabase client not found');
         return;
     }
 
-    if (!userId) {
+    const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
+    if (authError || !authUser) {
         console.log('No user logged in, redirecting...');
         window.location.href = '/login';
         return;
@@ -324,20 +321,22 @@ async function initSettingsPage() {
         els.cropPreviewImage.src = cropObjectUrl;
     }
 
+    let publicUserId = null;
+
     async function loadProfile() {
         try {
             const { data: user, error } = await supabase
                 .from('users')
                 .select('*')
-                .eq('id', userId)
+                .eq('auth_id', authUser.id)
                 .single();
 
             if (error) throw error;
             if (user) {
-                const fullName = user.full_name || '';
-                const parts = fullName.split(' ');
-                const first = parts[0] || '';
-                const last = parts.slice(1).join(' ') || '';
+                publicUserId = user.id;
+                const first = user.first_name || '';
+                const last = user.last_name || '';
+                const fullName = user.full_name || `${first} ${last}`.trim();
 
                 if (els.firstName) els.firstName.value = first;
                 if (els.lastName) els.lastName.value = last;
@@ -350,6 +349,7 @@ async function initSettingsPage() {
                     els.userRole.textContent = role.charAt(0).toUpperCase() + role.slice(1) + ' Account';
                 }
 
+                localStorage.setItem('userId', String(user.id));
                 localStorage.setItem('userName', fullName || 'User');
                 localStorage.setItem('userRole', (user.role || 'Member'));
 
@@ -405,15 +405,18 @@ async function initSettingsPage() {
 
             const updates = {
                 full_name: full_name,
+                first_name: first,
+                last_name: last,
                 phone: els.phone.value.trim(),
                 address: els.address.value.trim()
             };
 
             try {
+                if (!publicUserId) throw new Error('User profile not loaded');
                 const { error } = await supabase
                     .from('users')
                     .update(updates)
-                    .eq('id', userId);
+                    .eq('id', publicUserId);
 
                 if (error) throw error;
 
@@ -527,10 +530,11 @@ async function initSettingsPage() {
                 context.drawImage(cropImage, srcX, srcY, srcW, srcH, 0, 0, CROP_SIZE, CROP_SIZE);
                 const base64Data = canvas.toDataURL('image/jpeg', 0.92);
 
+                if (!publicUserId) throw new Error('User profile not loaded');
                 const { error } = await supabase
                     .from('users')
                     .update({ profile_image: base64Data })
-                    .eq('id', userId);
+                    .eq('id', publicUserId);
 
                 if (error) throw error;
 
@@ -575,32 +579,24 @@ async function initSettingsPage() {
             setLoading(els.updatePassBtn, true, 'Updating...');
 
             try {
-                const { data: user, error: fetchError } = await supabase
-                    .from('users')
-                    .select('password')
-                    .eq('id', userId)
-                    .single();
+                const { error: signInError } = await supabase.auth.signInWithPassword({
+                    email: authUser.email,
+                    password: current,
+                });
 
-                if (fetchError) throw fetchError;
-
-                const passwordMatches = dcodeIO?.bcrypt?.compareSync(current, user.password);
-                if (!passwordMatches) {
+                if (signInError) {
                     alert('Current password is incorrect.');
                     setLoading(els.updatePassBtn, false);
                     return;
                 }
 
-                const salt = dcodeIO.bcrypt.genSaltSync(10);
-                const hashedPassword = dcodeIO.bcrypt.hashSync(newPass, salt);
-
-                const { error: updateError } = await supabase
-                    .from('users')
-                    .update({ password: hashedPassword })
-                    .eq('id', userId);
+                const { error: updateError } = await supabase.auth.updateUser({
+                    password: newPass,
+                });
 
                 if (updateError) throw updateError;
 
-                showSuccessToast('Profile successfully updated');
+                showSuccessToast('Password successfully updated');
                 els.currentPass.value = '';
                 els.confirmPass.value = '';
 
