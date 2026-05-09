@@ -1,5 +1,6 @@
 // @ts-nocheck
 import React from 'react';
+import { createClient } from '@/utils/supabase/client';
 
 const { useEffect, useMemo, useRef, useState } = React;
 
@@ -70,16 +71,10 @@ export default function ReportsApp() {
     const lineRef = useRef(null);
     const lineInstance = useRef(null);
 
-    // ─── Supabase wait ────────────────────────────────────────────────────────
-    const waitForSupabase = async () => {
-        let client = window.supabaseClient;
-        let attempts = 0;
-        while (!client && attempts < 20) {
-            await new Promise(r => setTimeout(r, 500));
-            client = window.supabaseClient;
-            attempts++;
-        }
-        return client;
+    const supabaseRef = useRef(null);
+    const getClient = () => {
+        if (!supabaseRef.current) supabaseRef.current = createClient();
+        return supabaseRef.current;
     };
 
     // ─── Initial load: students + teachers ───────────────────────────────────
@@ -89,7 +84,7 @@ export default function ReportsApp() {
             setLoading(true);
             setError('');
             try {
-                const client = await waitForSupabase();
+                const client = getClient();
                 if (!client) throw new Error('Supabase client is not ready.');
 
                 const [studentRes, teacherRes] = await Promise.all([
@@ -160,7 +155,7 @@ export default function ReportsApp() {
         const load = async () => {
             setAttendanceLoading(true);
             try {
-                const client = await waitForSupabase();
+                const client = getClient();
                 if (!client) return;
 
                 const ids = students
@@ -301,11 +296,26 @@ export default function ReportsApp() {
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                cutout: '68%',
+                cutout: '70%',
+                layout: { padding: 8 },
                 plugins: {
                     legend: {
                         position: 'bottom',
-                        labels: { padding: 16, font: { size: 12, family: 'Poppins, sans-serif' } }
+                        labels: {
+                            padding: 14,
+                            boxWidth: 10,
+                            boxHeight: 10,
+                            usePointStyle: true,
+                            pointStyle: 'circle',
+                            font: { size: 12, family: 'Poppins, sans-serif' },
+                            color: '#374151'
+                        }
+                    },
+                    tooltip: {
+                        backgroundColor: '#111827',
+                        padding: 10,
+                        titleFont: { family: 'Poppins, sans-serif', size: 12 },
+                        bodyFont: { family: 'Poppins, sans-serif', size: 12 }
                     }
                 }
             }
@@ -328,22 +338,47 @@ export default function ReportsApp() {
                     data: weeklyLineData.data,
                     borderColor: '#860108',
                     backgroundColor: 'rgba(134,1,8,0.08)',
-                    borderWidth: 3,
-                    tension: 0.4,
+                    borderWidth: 2.5,
+                    tension: 0.35,
                     fill: true,
                     pointBackgroundColor: '#860108',
                     pointBorderColor: '#fff',
                     pointBorderWidth: 2,
-                    pointRadius: 6
+                    pointRadius: 4,
+                    pointHoverRadius: 6
                 }]
             },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                plugins: { legend: { display: false } },
+                layout: { padding: { top: 4, right: 8, bottom: 0, left: 0 } },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        backgroundColor: '#111827',
+                        padding: 10,
+                        titleFont: { family: 'Poppins, sans-serif', size: 12 },
+                        bodyFont: { family: 'Poppins, sans-serif', size: 12 },
+                        displayColors: false
+                    }
+                },
                 scales: {
-                    y: { beginAtZero: true, grid: { color: '#f3f4f6' }, ticks: { font: { family: 'Poppins, sans-serif', size: 11 } } },
-                    x: { grid: { display: false }, ticks: { font: { family: 'Poppins, sans-serif', size: 11 } } }
+                    y: {
+                        beginAtZero: true,
+                        grid: { color: '#f3f4f6', drawBorder: false },
+                        ticks: {
+                            font: { family: 'Poppins, sans-serif', size: 11 },
+                            color: '#9ca3af',
+                            precision: 0
+                        }
+                    },
+                    x: {
+                        grid: { display: false },
+                        ticks: {
+                            font: { family: 'Poppins, sans-serif', size: 11 },
+                            color: '#6b7280'
+                        }
+                    }
                 }
             }
         });
@@ -518,11 +553,10 @@ export default function ReportsApp() {
     // ─── Render ───────────────────────────────────────────────────────────────
     if (loading) {
         return (
-            <div style={{ padding: '40px', textAlign: 'center', color: '#9ca3af' }}>
-                <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ margin: '0 auto 12px', display: 'block', animation: 'spin 1s linear infinite' }}>
+            <div className="reports-state reports-state--loading">
+                <svg className="reports-state-spinner" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                     <circle cx="12" cy="12" r="10" strokeDasharray="60" strokeDashoffset="20"/>
                 </svg>
-                <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
                 Loading report data…
             </div>
         );
@@ -530,17 +564,21 @@ export default function ReportsApp() {
 
     if (error) {
         return (
-            <div style={{ padding: '32px', textAlign: 'center', color: '#dc2626' }}>
-                <p style={{ fontWeight: 600 }}>Failed to load data</p>
-                <p style={{ fontSize: 13, marginTop: 4 }}>{error}</p>
+            <div className="reports-state reports-state--error">
+                <p style={{ fontWeight: 600, margin: 0 }}>Failed to load data</p>
+                <p style={{ fontSize: 13, marginTop: 4, marginBottom: 0 }}>{error}</p>
             </div>
         );
     }
 
+    const presentCount = donutStats.present;
+    const lateCount = donutStats.late;
+    const absentCount = donutStats.absent;
+
     return (
-        <>
-            {/* ── GLOBAL FILTER CARD ── */}
-            <div className="filters-card" style={{ marginBottom: 24 }}>
+        <div className="reports-page">
+            {/* ── FILTERS ── */}
+            <div className="reports-section filters-card">
                 <h4 className="filters-title">Report Filters</h4>
                 <div className="filter-group-row">
                     <div className="filter-item">
@@ -575,8 +613,8 @@ export default function ReportsApp() {
                     {activeSectionInfo && (
                         <div className="filter-item" style={{ flex: 2 }}>
                             <label className="filter-label">Assigned Teacher</label>
-                            <div style={{ paddingTop: 8 }}>
-                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: '#fef2f2', color: '#860108', border: '1px solid #fecaca', borderRadius: 999, padding: '4px 14px', fontSize: 13, fontWeight: 600 }}>
+                            <div>
+                                <span className="reports-teacher-pill">
                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
                                     {activeSectionInfo.adviser}
                                 </span>
@@ -586,85 +624,119 @@ export default function ReportsApp() {
                 </div>
             </div>
 
-            {/* ── CHARTS GRID ── */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 24, opacity: attendanceLoading ? 0.5 : 1, transition: 'opacity 0.3s' }}>
-                {/* Donut Chart */}
-                <div className="dashboard-panel animate-on-load" style={{ animationDelay: '0.1s', padding: 24 }}>
+            {/* ── KPI STRIP ── */}
+            <div className="reports-section reports-kpi-strip" style={{ opacity: attendanceLoading ? 0.6 : 1, transition: 'opacity 0.2s' }}>
+                <div className="dashboard-stat-card">
+                    <div className="stat-icon stat-icon-total">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0284c7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                    </div>
+                    <div className="stat-text">
+                        <div className="stat-number">{sectionStudents.length}</div>
+                        <div className="stat-label">Students</div>
+                    </div>
+                </div>
+                <div className="dashboard-stat-card">
+                    <div className="stat-icon stat-icon-present">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                    </div>
+                    <div className="stat-text">
+                        <div className="stat-number">{presentCount}</div>
+                        <div className="stat-label">Present</div>
+                    </div>
+                </div>
+                <div className="dashboard-stat-card">
+                    <div className="stat-icon stat-icon-late">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                    </div>
+                    <div className="stat-text">
+                        <div className="stat-number">{lateCount}</div>
+                        <div className="stat-label">Late</div>
+                    </div>
+                </div>
+                <div className="dashboard-stat-card">
+                    <div className="stat-icon stat-icon-absent">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    </div>
+                    <div className="stat-text">
+                        <div className="stat-number">{absentCount}</div>
+                        <div className="stat-label">Absent</div>
+                    </div>
+                </div>
+            </div>
+
+            {/* ── CHARTS ── */}
+            <div className="reports-section reports-charts-row" style={{ opacity: attendanceLoading ? 0.6 : 1, transition: 'opacity 0.2s' }}>
+                <div className="dashboard-panel animate-on-load" style={{ animationDelay: '0.1s' }}>
                     <div className="dashboard-panel-header">
                         <h3 className="dashboard-panel-title">Monthly Attendance Breakdown</h3>
-                        {attendanceLoading && <span style={{ fontSize: 11, color: '#9ca3af' }}>Updating…</span>}
+                        {attendanceLoading && <span className="panel-meta">Updating…</span>}
                     </div>
-                    <div style={{ height: 260 }}>
+                    <div className="reports-chart-frame">
                         <canvas ref={donutRef}></canvas>
                     </div>
                     {!attendanceLoading && attendanceRecords.length === 0 && (
-                        <p style={{ textAlign: 'center', color: '#9ca3af', fontSize: 13, marginTop: 8 }}>No records for this period</p>
+                        <p className="reports-empty-inline">No records for this period</p>
                     )}
                 </div>
-
-                {/* Line Chart */}
-                <div className="dashboard-panel animate-on-load" style={{ animationDelay: '0.15s', padding: 24 }}>
+                <div className="dashboard-panel animate-on-load" style={{ animationDelay: '0.15s' }}>
                     <div className="dashboard-panel-header">
                         <h3 className="dashboard-panel-title">Weekly Present Trend</h3>
-                        <span style={{ fontSize: 11, color: '#9ca3af' }}>{monthLabel}</span>
+                        <span className="panel-meta">{monthLabel}</span>
                     </div>
-                    <div style={{ height: 260 }}>
+                    <div className="reports-chart-frame">
                         <canvas ref={lineRef}></canvas>
                     </div>
                 </div>
             </div>
 
-            {/* ── CONTEXT HEADER ── */}
+            {/* ── TOOLBAR ── */}
             {activeSectionInfo && (
-                <div className="detail-header" style={{ marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
-                    <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
-                        <div className="header-stat-item">
-                            <span className="header-stat-label">Section:</span>
-                            <span className="header-stat-value">{activeSectionInfo.label}</span>
+                <div className="reports-section reports-toolbar">
+                    <div className="reports-context-strip">
+                        <div className="reports-context-item">
+                            <span className="reports-context-label">Section</span>
+                            <span className="reports-context-value" title={activeSectionInfo.label}>{activeSectionInfo.label}</span>
                         </div>
-                        <div className="header-stat-item">
-                            <span className="header-stat-label">Period:</span>
-                            <span className="header-stat-value">{monthLabel}</span>
+                        <div className="reports-context-item">
+                            <span className="reports-context-label">Period</span>
+                            <span className="reports-context-value" title={monthLabel}>{monthLabel}</span>
                         </div>
-                        <div className="header-stat-item">
-                            <span className="header-stat-label">Teacher:</span>
-                            <span className="header-stat-value">{activeSectionInfo.adviser}</span>
-                        </div>
-                        <div className="header-stat-item">
-                            <span className="header-stat-label">Students:</span>
-                            <span className="header-stat-value">{sectionStudents.length}</span>
+                        <div className="reports-context-item">
+                            <span className="reports-context-label">Teacher</span>
+                            <span className="reports-context-value" title={activeSectionInfo.adviser}>{activeSectionInfo.adviser}</span>
                         </div>
                     </div>
-
-                    {/* Export / Email buttons */}
-                    <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+                    <div className="reports-actions">
                         <button
-                            className="back-btn"
+                            type="button"
+                            className="toolbar-btn"
                             onClick={exportCSV}
                             disabled={studentRows.length === 0}
                             title="Download as CSV"
                         >
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: 5, verticalAlign: 'middle' }}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                            Export CSV
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                            CSV
                         </button>
                         <button
-                            className="back-btn"
+                            type="button"
+                            className="toolbar-btn"
                             onClick={exportPDF}
                             disabled={studentRows.length === 0}
-                            title="Export & Print as PDF"
+                            title="Export & print as PDF"
                         >
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: 5, verticalAlign: 'middle' }}><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
-                            Export PDF
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+                            PDF
                         </button>
                         <button
-                            className="generate-summary-btn"
+                            type="button"
+                            className="toolbar-btn toolbar-btn--primary"
                             onClick={emailReport}
                             disabled={emailLoading || studentRows.length === 0}
                             title={activeSectionInfo.adviserEmail ? `Send to ${activeSectionInfo.adviserEmail}` : 'No teacher email on file'}
                         >
                             {emailLoading ? 'Sending…' : (
                                 <>
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: 5, verticalAlign: 'middle' }}><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
                                     Email Report
                                 </>
                             )}
@@ -673,71 +745,70 @@ export default function ReportsApp() {
                 </div>
             )}
 
-            {/* Email status */}
             {emailStatus && (
-                <div style={{ marginBottom: 12, padding: '10px 16px', borderRadius: 8, fontSize: 13, fontWeight: 500, background: emailStatus.type === 'success' ? '#dcfce7' : '#fee2e2', color: emailStatus.type === 'success' ? '#15803d' : '#b91c1c', border: `1px solid ${emailStatus.type === 'success' ? '#86efac' : '#fca5a5'}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div className={`reports-section reports-status-banner reports-status-banner--${emailStatus.type === 'success' ? 'success' : 'error'}`}>
                     <span>{emailStatus.msg}</span>
-                    <button onClick={() => setEmailStatus(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', fontSize: 16, lineHeight: 1 }}>×</button>
+                    <button type="button" onClick={() => setEmailStatus(null)} aria-label="Dismiss">×</button>
                 </div>
             )}
 
-            {/* ── MASTER ATTENDANCE TABLE ── */}
-            <div className="dashboard-panel animate-on-load" style={{ animationDelay: '0.2s', padding: 0, overflow: 'hidden' }}>
-                <div style={{ padding: '16px 20px 12px', borderBottom: '1px solid #f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <h3 className="dashboard-panel-title" style={{ margin: 0, fontSize: 16 }}>
-                        Student Attendance Summary
-                    </h3>
-                    <span style={{ fontSize: 12, color: '#6b7280' }}>
-                        Click a row for daily breakdown
-                    </span>
+            {/* ── TABLE ── */}
+            <div className="reports-section reports-table-card animate-on-load" style={{ animationDelay: '0.2s' }}>
+                <div className="reports-table-header">
+                    <h3>Student Attendance Summary</h3>
+                    <span className="reports-table-hint">Click a row for daily breakdown</span>
                 </div>
 
                 <div className="attendance-table-container">
-                    <table className="attendance-table" style={{ tableLayout: 'fixed' }}>
+                    <table className="attendance-table">
+                        <colgroup>
+                            <col style={{ width: '46%' }} />
+                            <col style={{ width: '14%' }} />
+                            <col style={{ width: '18%' }} />
+                            <col style={{ width: '18%' }} />
+                            <col style={{ width: '4%' }} />
+                        </colgroup>
                         <thead>
                             <tr>
-                                <th style={{ width: '40%', textAlign: 'left', paddingLeft: 20 }}>Student Name</th>
-                                <th style={{ width: '15%' }}>Gender</th>
-                                <th style={{ width: '20%' }}>Total Absences</th>
-                                <th style={{ width: '20%' }}>Total Lates</th>
-                                <th style={{ width: '5%' }}></th>
+                                <th>Student Name</th>
+                                <th className="col-center">Gender</th>
+                                <th className="col-center">Absences</th>
+                                <th className="col-center">Lates</th>
+                                <th></th>
                             </tr>
                         </thead>
                         <tbody>
                             {attendanceLoading ? (
-                                <tr><td colSpan="5" style={{ padding: '32px', textAlign: 'center', color: '#9ca3af' }}>Loading attendance data…</td></tr>
+                                <tr><td colSpan={5} className="reports-empty-row">Loading attendance data…</td></tr>
                             ) : studentRows.length === 0 ? (
-                                <tr><td colSpan="5" style={{ padding: '40px', textAlign: 'center', color: '#9ca3af' }}>
-                                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ margin: '0 auto 8px', display: 'block', opacity: 0.4 }}><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
-                                    No students found in this section.
-                                </td></tr>
+                                <tr>
+                                    <td colSpan={5} className="reports-empty-row">
+                                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
+                                        </svg>
+                                        No students found in this section.
+                                    </td>
+                                </tr>
                             ) : (
                                 studentRows.map(s => (
                                     <tr
                                         key={s.student_id}
                                         onClick={() => setSelectedStudent(s)}
-                                        style={{ cursor: 'pointer' }}
                                         className="report-row"
-                                        onMouseEnter={e => e.currentTarget.style.background = '#f9fafb'}
-                                        onMouseLeave={e => e.currentTarget.style.background = ''}
                                     >
-                                        <td style={{ paddingLeft: 20, fontWeight: 600, color: '#111827' }}>
-                                            {s.last_name}, {s.first_name}
-                                        </td>
-                                        <td style={{ textAlign: 'center', color: '#6b7280', fontSize: 13 }}>
-                                            {s.gender || '—'}
-                                        </td>
-                                        <td style={{ textAlign: 'center' }}>
-                                            <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: 32, padding: '2px 10px', borderRadius: 12, fontSize: 13, fontWeight: 700, background: s.totalAbsences > 0 ? '#fee2e2' : '#f3f4f6', color: s.totalAbsences > 0 ? '#dc2626' : '#9ca3af' }}>
+                                        <td className="student-name">{s.last_name}, {s.first_name}</td>
+                                        <td className="col-center gender-cell">{s.gender || '—'}</td>
+                                        <td className="col-center">
+                                            <span className={`count-pill ${s.totalAbsences > 0 ? 'count-pill--absent' : ''}`}>
                                                 {s.totalAbsences}
                                             </span>
                                         </td>
-                                        <td style={{ textAlign: 'center' }}>
-                                            <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: 32, padding: '2px 10px', borderRadius: 12, fontSize: 13, fontWeight: 700, background: s.totalLates > 0 ? '#fef3c7' : '#f3f4f6', color: s.totalLates > 0 ? '#d97706' : '#9ca3af' }}>
+                                        <td className="col-center">
+                                            <span className={`count-pill ${s.totalLates > 0 ? 'count-pill--late' : ''}`}>
                                                 {s.totalLates}
                                             </span>
                                         </td>
-                                        <td style={{ textAlign: 'center', color: '#9ca3af', fontSize: 16 }}>›</td>
+                                        <td className="col-center"><span className="chevron">›</span></td>
                                     </tr>
                                 ))
                             )}
@@ -749,98 +820,101 @@ export default function ReportsApp() {
             {/* ── STUDENT MODAL ── */}
             {selectedStudent && (
                 <div
+                    className="reports-modal-overlay"
                     onClick={e => { if (e.target === e.currentTarget) setSelectedStudent(null); }}
-                    style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}
                 >
-                    <div style={{ background: '#fff', borderRadius: 16, width: '100%', maxWidth: 720, maxHeight: '90vh', overflow: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
-                        {/* Modal header */}
-                        <div style={{ padding: '20px 24px 16px', borderBottom: '1px solid #f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div className="reports-modal" role="dialog" aria-modal="true">
+                        <div className="reports-modal-header">
                             <div>
-                                <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: '#860108', fontFamily: 'Poppins, sans-serif' }}>
-                                    {selectedStudent.last_name}, {selectedStudent.first_name}
-                                </h2>
-                                <p style={{ margin: '3px 0 0', fontSize: 13, color: '#6b7280' }}>
-                                    {activeSectionInfo?.label} &nbsp;·&nbsp; {monthLabel} &nbsp;·&nbsp; {selectedStudent.gender || '—'}
+                                <h2 className="reports-modal-title">{selectedStudent.last_name}, {selectedStudent.first_name}</h2>
+                                <p className="reports-modal-subtitle">
+                                    {activeSectionInfo?.label} · {monthLabel} · {selectedStudent.gender || '—'}
                                 </p>
                             </div>
                             <button
+                                type="button"
+                                className="reports-modal-close"
                                 onClick={() => setSelectedStudent(null)}
-                                style={{ background: '#f3f4f6', border: 'none', borderRadius: 8, width: 32, height: 32, cursor: 'pointer', fontSize: 18, color: '#374151', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                aria-label="Close"
                             >×</button>
                         </div>
 
-                        {/* Summary pills */}
-                        <div style={{ padding: '14px 24px', display: 'flex', gap: 12, borderBottom: '1px solid #f3f4f6' }}>
+                        <div className="reports-modal-pills">
                             {[
-                                { label: 'Present', count: Object.values(studentRecordMap[selectedStudent.student_id] || {}).filter(v => v === 'Present').length, bg: '#dcfce7', color: '#15803d' },
-                                { label: 'Late', count: selectedStudent.totalLates, bg: '#fef3c7', color: '#d97706' },
-                                { label: 'Absent', count: selectedStudent.totalAbsences, bg: '#fee2e2', color: '#dc2626' },
-                            ].map(({ label, count, bg, color }) => (
-                                <div key={label} style={{ background: bg, borderRadius: 10, padding: '8px 18px', textAlign: 'center' }}>
-                                    <div style={{ fontSize: 22, fontWeight: 700, color, fontFamily: 'Poppins, sans-serif' }}>{count}</div>
-                                    <div style={{ fontSize: 11, color, fontWeight: 600 }}>{label}</div>
+                                { key: 'present', label: 'Present', count: Object.values(studentRecordMap[selectedStudent.student_id] || {}).filter(v => v === 'Present').length },
+                                { key: 'late', label: 'Late', count: selectedStudent.totalLates },
+                                { key: 'absent', label: 'Absent', count: selectedStudent.totalAbsences },
+                            ].map(({ key, label, count }) => (
+                                <div key={key} className={`reports-modal-pill reports-modal-pill--${key}`}>
+                                    <div className="num">{count}</div>
+                                    <div className="label">{label}</div>
                                 </div>
                             ))}
                         </div>
 
-                        {/* 5×5 Grid */}
-                        <div style={{ padding: '20px 24px 24px', overflowX: 'auto' }}>
-                            <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 4 }}>
-                                <thead>
-                                    <tr>
-                                        <th style={{ width: 64, fontSize: 11, color: '#6b7280', fontWeight: 600, textAlign: 'left', paddingBottom: 6 }}>Week</th>
-                                        {DAY_LABELS.map(d => (
-                                            <th key={d} style={{ fontSize: 12, color: '#374151', fontWeight: 600, textAlign: 'center', paddingBottom: 6 }}>{d}</th>
-                                        ))}
-                                    </tr>
-                                </thead>
-                                <tbody>
+                        <div className="reports-calendar">
+                            {monthWeeks.length === 0 ? (
+                                <p style={{ textAlign: 'center', color: '#9ca3af', padding: 20, margin: 0 }}>No school days found for this month.</p>
+                            ) : (
+                                <div className="reports-calendar-grid">
+                                    <div className="reports-calendar-head">Week</div>
+                                    {DAY_LABELS.map(d => <div key={d} className="reports-calendar-head">{d}</div>)}
+
                                     {monthWeeks.map((week, wi) => {
                                         const records = studentRecordMap[selectedStudent.student_id] || {};
                                         return (
-                                            <tr key={wi}>
-                                                <td style={{ fontSize: 11, color: '#9ca3af', fontWeight: 600, paddingRight: 8, verticalAlign: 'middle' }}>
-                                                    Week {wi + 1}
-                                                </td>
+                                            <React.Fragment key={wi}>
+                                                <div className="reports-calendar-week-label">W{wi + 1}</div>
                                                 {week.map((date, di) => {
                                                     const status = date ? records[date] : null;
-                                                    const cfg = !date ? { bg: '#f9fafb', color: '#d1d5db', label: '', border: '#f3f4f6' }
-                                                        : status === 'Present' ? { bg: '#dcfce7', color: '#15803d', label: 'P', border: '#86efac' }
-                                                        : status === 'Late'    ? { bg: '#fef3c7', color: '#d97706', label: 'L', border: '#fcd34d' }
-                                                        : status === 'Absent'  ? { bg: '#fee2e2', color: '#dc2626', label: 'A', border: '#fca5a5' }
-                                                        :                        { bg: '#f9fafb', color: '#d1d5db', label: '–', border: '#e5e7eb' };
+                                                    let modifier = 'empty';
+                                                    let label = '';
+                                                    if (date) {
+                                                        if (status === 'Present') { modifier = 'present'; label = 'P'; }
+                                                        else if (status === 'Late') { modifier = 'late'; label = 'L'; }
+                                                        else if (status === 'Absent') { modifier = 'absent'; label = 'A'; }
+                                                        else { modifier = 'norecord'; label = '·'; }
+                                                    }
                                                     const dayNum = date ? date.split('-')[2] : '';
                                                     return (
-                                                        <td key={di} title={date ? `${date}: ${status || 'No record'}` : ''} style={{ textAlign: 'center', padding: 0 }}>
-                                                            <div style={{ background: cfg.bg, border: `1px solid ${cfg.border}`, borderRadius: 8, padding: '6px 4px', minWidth: 54, transition: 'all 0.15s' }}>
-                                                                <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 2 }}>{dayNum}</div>
-                                                                <div style={{ fontSize: 15, fontWeight: 700, color: cfg.color, lineHeight: 1 }}>{cfg.label || '·'}</div>
-                                                            </div>
-                                                        </td>
+                                                        <div
+                                                            key={di}
+                                                            className={`reports-calendar-cell reports-calendar-cell--${modifier}`}
+                                                            title={date ? `${date}: ${status || 'No record'}` : ''}
+                                                        >
+                                                            <div className="day">{dayNum || '·'}</div>
+                                                            <div className="mark">{label || '·'}</div>
+                                                        </div>
                                                     );
                                                 })}
-                                            </tr>
+                                            </React.Fragment>
                                         );
                                     })}
-                                    {monthWeeks.length === 0 && (
-                                        <tr><td colSpan="6" style={{ textAlign: 'center', color: '#9ca3af', padding: 20 }}>No school days found for this month.</td></tr>
-                                    )}
-                                </tbody>
-                            </table>
+                                </div>
+                            )}
 
-                            {/* Legend */}
-                            <div style={{ marginTop: 14, display: 'flex', gap: 16, fontSize: 12, color: '#6b7280' }}>
-                                {[['#dcfce7','#15803d','P – Present'], ['#fef3c7','#d97706','L – Late'], ['#fee2e2','#dc2626','A – Absent'], ['#f9fafb','#d1d5db','· – No record']].map(([bg, color, text]) => (
-                                    <span key={text} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                                        <span style={{ display: 'inline-block', width: 14, height: 14, borderRadius: 3, background: bg, border: `1px solid ${color}` }}></span>
-                                        {text}
-                                    </span>
-                                ))}
+                            <div className="reports-calendar-legend">
+                                <span className="reports-calendar-legend-item" style={{ color: '#15803d' }}>
+                                    <span className="reports-calendar-legend-swatch" style={{ background: '#dcfce7' }} />
+                                    P – Present
+                                </span>
+                                <span className="reports-calendar-legend-item" style={{ color: '#d97706' }}>
+                                    <span className="reports-calendar-legend-swatch" style={{ background: '#fef3c7' }} />
+                                    L – Late
+                                </span>
+                                <span className="reports-calendar-legend-item" style={{ color: '#dc2626' }}>
+                                    <span className="reports-calendar-legend-swatch" style={{ background: '#fee2e2' }} />
+                                    A – Absent
+                                </span>
+                                <span className="reports-calendar-legend-item" style={{ color: '#9ca3af' }}>
+                                    <span className="reports-calendar-legend-swatch" style={{ background: '#fafafa' }} />
+                                    · – No record
+                                </span>
                             </div>
                         </div>
                     </div>
                 </div>
             )}
-        </>
+        </div>
     );
 }
