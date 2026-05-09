@@ -337,3 +337,8 @@ export class ResetUserPasswordDto {
   @MaxLength(128)
   newPassword?: string;
 }
+
+export class UpdateUserEmailDto {
+  @IsEmail()
+  email!: string;
+}

@@ -5,6 +5,7 @@ import {
   Delete,
   Get,
   Param,
+  Patch,
   Post,
   Query,
   UseGuards,
@@ -21,6 +22,7 @@ import {
   SendAttendanceDto,
   SendOtpDto,
   SendInviteDto,
+  UpdateUserEmailDto,
 } from './api.dto';
 
 @Controller('api')
@@ -108,5 +110,13 @@ export class ApiController {
   async resetUserPassword(@Param('id') id: string, @Body() body: ResetUserPasswordDto) {
     if (!id) throw new BadRequestException('id is required');
     return this.apiService.resetUserPassword(id, body.newPassword);
+  }
+
+  @Patch('users/:id/email')
+  @Roles('admin')
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
+  async updateUserEmail(@Param('id') id: string, @Body() body: UpdateUserEmailDto) {
+    if (!id) throw new BadRequestException('id is required');
+    return this.apiService.updateUserEmail(id, body.email);
   }
 }

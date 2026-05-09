@@ -439,6 +439,60 @@ export class ApiService {
     return { success: true, tempPassword: password };
   }
 
+  async updateUserEmail(publicUserId: string | number, newEmail: string) {
+    if (!this.supabaseAdmin) {
+      return { success: false, error: 'Server is missing service-role configuration.' };
+    }
+
+    const email = newEmail.trim().toLowerCase();
+    const username = email.split('@')[0];
+
+    const { data: row, error: lookupError } = await this.supabaseRead
+      .from('users')
+      .select('auth_id')
+      .eq('id', publicUserId)
+      .maybeSingle();
+
+    if (lookupError || !row) {
+      return { success: false, error: lookupError?.message || 'User not found.' };
+    }
+    if (!row.auth_id) {
+      return { success: false, error: 'User is not linked to an authentication record.' };
+    }
+
+    const { error: authError } = await this.supabaseAdmin.auth.admin.updateUserById(
+      row.auth_id,
+      { email, email_confirm: true }
+    );
+
+    if (authError) {
+      const conflict = /already.*registered|already.*been used|duplicate/i.test(authError.message);
+      return {
+        success: false,
+        error: conflict ? 'A user with this email already exists.' : authError.message,
+      };
+    }
+
+    const { error: updateError } = await this.supabaseRead
+      .from('users')
+      .update({ email, username })
+      .eq('id', publicUserId);
+
+    if (updateError) {
+      this.logger.error(
+        `updateUserEmail: public.users update failed for ${publicUserId} after auth was changed: ${updateError.message}`
+      );
+      const code = (updateError as any)?.code;
+      const friendly =
+        code === '23505'
+          ? 'A user with this email or username already exists.'
+          : updateError.message;
+      return { success: false, error: friendly };
+    }
+
+    return { success: true, email, username };
+  }
+
   private generateTempPassword(): string {
     const bytes = require('crypto').randomBytes(12).toString('base64url');
     return `Tmp_${bytes}`;

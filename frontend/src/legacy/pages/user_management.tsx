@@ -325,15 +325,19 @@ export default function UserManagementApp() {
         e.preventDefault();
         if (!newEmail) return;
         setIsSavingEmail(true);
-        const client = window.supabaseClient;
         try {
-            const { error } = await client.from('users').update({ email: newEmail, username: newEmail.split('@')[0] }).eq('id', editEmailModalUser.id);
-            if (error) throw error;
-            setUsers(users.map(u => u.id === editEmailModalUser.id ? { ...u, email: newEmail, username: newEmail.split('@')[0] } : u));
+            const result = await apiFetch(`/api/users/${editEmailModalUser.id}/email`, {
+                method: 'PATCH',
+                body: JSON.stringify({ email: newEmail }),
+            });
+            if (result.success === false) throw new Error(result.error || 'Failed to update email.');
+            const updatedEmail = result.email || newEmail;
+            const updatedUsername = result.username || updatedEmail.split('@')[0];
+            setUsers(users.map(u => u.id === editEmailModalUser.id ? { ...u, email: updatedEmail, username: updatedUsername } : u));
             setEditEmailModalUser(null);
             setPopupMessage({ type: 'success', text: 'Email updated successfully.' });
         } catch (err) {
-            setPopupMessage({ type: 'error', text: 'Failed to update email. ' + err.message });
+            setPopupMessage({ type: 'error', text: err.message || 'Failed to update email.' });
         } finally {
             setIsSavingEmail(false);
         }
