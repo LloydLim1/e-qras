@@ -1,7 +1,27 @@
 // @ts-nocheck
 import React from 'react';
+import { createClient } from '@/utils/supabase/client';
 
 /* Auto-extracted from add_person.php */
+
+async function apiFetch(path, options = {}) {
+    const supabase = createClient();
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token;
+    const headers = {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(options.headers || {}),
+    };
+    const res = await fetch(path, { ...options, headers });
+    let data = null;
+    try { data = await res.json(); } catch (_) { /* ignore */ }
+    if (!res.ok) {
+        const message = (data && (data.error || data.message)) || `Request failed (${res.status})`;
+        throw new Error(message);
+    }
+    return data || {};
+}
 
 export default function AddPersonApp() {
     React.useEffect(() => {
@@ -214,55 +234,30 @@ async function addPerson() {
         return;
     }
 
-    const client = window.supabaseClient;
-    if (!client) {
-        alert('Database connection not available. Please check your internet connection or Supabase configuration.');
-        return;
-    }
-
     const addBtn = document.getElementById('addPersonBtn');
     addBtn.disabled = true;
     addBtn.textContent = 'Adding...';
 
     try {
-        const username = email.split('@')[0];
-
         const passwordElement = document.getElementById('password');
-        let passwordInput = passwordElement ? passwordElement.value.trim() : '';
-        if (!passwordInput) {
-            passwordInput = 'password123';
-        }
+        const passwordInput = passwordElement ? passwordElement.value.trim() : '';
 
-        const salt = dcodeIO.bcrypt.genSaltSync(10);
-        const hashedPassword = dcodeIO.bcrypt.hashSync(passwordInput, salt);
+        const result = await apiFetch('/api/users', {
+            method: 'POST',
+            body: JSON.stringify({
+                email,
+                first_name: firstName,
+                last_name: lastName,
+                role: personType,
+                phone: phone || undefined,
+                birthday: birthday || undefined,
+                sex: sex || undefined,
+                advisory_class: personType === 'teacher' ? advisoryClass : undefined,
+                password: passwordInput || undefined,
+            }),
+        });
 
-        const personData = {
-            first_name: firstName,
-            last_name: lastName,
-            full_name: `${firstName} ${lastName}`,
-            email: email,
-            username: username,
-            password: hashedPassword,
-            phone: phone,
-            birthday: birthday,
-            sex: sex,
-            role: personType,
-            created_at: new Date().toISOString()
-        };
-
-        if (personType === 'teacher') {
-            personData.advisory_class = advisoryClass;
-        } else {
-            personData.advisory_class = null;
-        }
-
-        const { error: userError } = await client
-            .from('users')
-            .insert([personData])
-            .select()
-            .single();
-
-        if (userError) throw userError;
+        if (result.success === false) throw new Error(result.error || 'Failed to add person.');
 
         alert(`Successfully added ${personType}: ${firstName} ${lastName}`);
 
@@ -280,15 +275,7 @@ async function addPerson() {
 
     } catch (err) {
         console.error('Error adding person:', err);
-        let errorMessage = 'Failed to add person.';
-
-        if (err.code === '23505') {
-            errorMessage = 'A user with this email address or username already exists.';
-        } else {
-            errorMessage += ' ' + (err.message || err.details || '');
-        }
-
-        alert(errorMessage);
+        alert(err.message || 'Failed to add person.');
     } finally {
         addBtn.disabled = false;
         addBtn.textContent = 'Add Person';

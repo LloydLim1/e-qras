@@ -34,15 +34,12 @@ export default function ResetPasswordPage() {
         setIsError(false);
 
         try {
-            const salt = dcodeIO.bcrypt.genSaltSync(10);
-            const hashedPassword = dcodeIO.bcrypt.hashSync(password, salt);
-
             const response = await fetch('/api/complete_reset.php', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     token: sessionStorage.getItem('resetToken'),
-                    newPassword: hashedPassword
+                    newPassword: password
                 })
             });
             const result = await response.json();

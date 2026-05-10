@@ -15,11 +15,14 @@
     "@nestjs/platform-express": "^11.1.16",
     "@nestjs/throttler": "^6.4.0",
     "@supabase/supabase-js": "2.56.1",
+    "bcryptjs": "^3.0.3",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.2",
+    "dotenv": "^17.4.2",
     "helmet": "^8.1.0",
     "jsonwebtoken": "9.0.2",
     "nodemailer": "^8.0.2",
+    "qrcode": "^1.5.4",
     "reflect-metadata": "0.2.2",
     "rxjs": "7.8.2"
   },
@@ -27,9 +30,11 @@
     "@nestjs/cli": "^11.0.16",
     "@nestjs/schematics": "^11.0.9",
     "@nestjs/testing": "^11.1.16",
+    "@types/bcryptjs": "^2.4.6",
     "@types/jsonwebtoken": "9.0.10",
     "@types/node": "20.17.30",
     "@types/nodemailer": "6.4.17",
+    "@types/qrcode": "^1.5.6",
     "typescript": "5.8.3"
   }
 }

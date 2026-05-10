@@ -13,50 +13,22 @@ export default function ForgotPasswordPage() {
         setIsError(false);
         setLoading(true);
 
-        const client = window.supabaseClient;
-        if (!client) {
-            setMessage('Database connection error.');
-            setIsError(true);
-            setLoading(false);
-            return;
-        }
-
         try {
             const normalizedEmail = email.trim().toLowerCase();
 
-            const { data: user, error } = await client
-                .from('users')
-                .select('id, full_name, email')
-                .ilike('email', normalizedEmail)
-                .maybeSingle();
-
-            if (error) throw error;
-            if (!user) {
-                throw new Error('No account found with that email address. Please make sure you entered the correct email used during registration.');
-            }
-
-            const otp = Math.floor(100000 + Math.random() * 900000).toString();
-            const expiry = new Date(Date.now() + 10 * 60 * 1000).toISOString();
-
-            const { error: updateError } = await client
-                .from('users')
-                .update({ otp_code: otp, otp_expiry: expiry })
-                .eq('id', user.id);
-            if (updateError) throw updateError;
-
-            const response = await fetch('/api/send_otp.php', {
+            const response = await fetch('/api/auth/request-password-reset', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email: normalizedEmail, otp })
+                body: JSON.stringify({ email: normalizedEmail })
             });
 
-            const result = await response.json();
-            if (!result.success) {
-                throw new Error(result.error || 'Failed to send email.');
+            const result = await response.json().catch(() => ({}));
+            if (!response.ok || !result.success) {
+                throw new Error(result.error || 'Failed to send OTP.');
             }
 
             sessionStorage.setItem('resetEmail', normalizedEmail);
-            setMessage('OTP has been sent to your email!');
+            setMessage('If an account exists for that email, an OTP has been sent.');
             setIsError(false);
             setTimeout(() => window.location.href = '/verify-otp', 1200);
         } catch (err) {

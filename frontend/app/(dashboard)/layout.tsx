@@ -6,17 +6,21 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import BodyClassManager from '@/components/BodyClassManager';
 import DashboardAuthGuard from '@/components/DashboardAuthGuard';
+import { createClient } from '@/utils/supabase/client';
 
+// `allow` mirrors the middleware role rules (src/utils/supabase/middleware.ts).
+// Keep them in sync — if a route's middleware rule changes, update the nav
+// entry too, otherwise users will see a link that immediately redirects.
 const NAV_ITEMS = [
-  { href: '/dashboard', label: 'Dashboard', icon: 'fa-solid fa-chart-line' },
-  { href: '/attendance', label: 'Attendance', icon: 'fa-solid fa-clipboard-check' },
-  { href: '/add-person', label: 'Add Person', icon: 'fa-solid fa-user-plus' },
-  { href: '/import', label: 'Import', icon: 'fa-solid fa-file-import' },
-  { href: '/my-section', label: 'My Section', icon: 'fa-solid fa-users' },
-  { href: '/qr-scanner', label: 'QR Scanner', icon: 'fa-solid fa-qrcode' },
-  { href: '/reports', label: 'Reports', icon: 'fa-solid fa-chart-column' },
-  { href: '/student-qrs', label: 'Student QRs', icon: 'fa-solid fa-id-card' },
-  { href: '/settings', label: 'Settings', icon: 'fa-solid fa-gear' }
+  { href: '/dashboard',       label: 'Dashboard',   icon: 'fa-solid fa-chart-line',     allow: ['admin', 'teacher', 'guard'] },
+  { href: '/attendance',      label: 'Attendance',  icon: 'fa-solid fa-clipboard-check', allow: ['admin', 'teacher'] },
+  { href: '/user-management', label: 'Users',       pageTitle: 'User Management', icon: 'fa-solid fa-users-gear', allow: ['admin'] },
+  { href: '/import',          label: 'Import',      icon: 'fa-solid fa-file-import',    allow: ['admin'] },
+  { href: '/my-section',      label: 'My Section',  icon: 'fa-solid fa-users',          allow: ['admin', 'teacher'] },
+  { href: '/qr-scanner',      label: 'QR Scanner',  icon: 'fa-solid fa-qrcode',         allow: ['admin', 'guard'] },
+  { href: '/reports',         label: 'Reports',     icon: 'fa-solid fa-chart-column',   allow: ['admin', 'teacher'] },
+  { href: '/student-qrs',     label: 'Student QRs', icon: 'fa-solid fa-id-card',        allow: ['admin', 'teacher'] },
+  { href: '/settings',        label: 'Settings',    icon: 'fa-solid fa-gear',           allow: ['admin', 'teacher', 'guard'] }
 ];
 
 export default function DashboardLayout({ children }) {
@@ -25,16 +29,19 @@ export default function DashboardLayout({ children }) {
   const [userName, setUserName] = useState('User');
   const [userRole, setUserRole] = useState('Admin');
   const [userProfileImage, setUserProfileImage] = useState<string | null>(null);
+  const [advisoryClass, setAdvisoryClass] = useState<string | null>(null);
 
   useEffect(() => {
     const syncProfile = () => {
       const storedName = localStorage.getItem('userName');
       const storedRole = localStorage.getItem('userRole');
       const storedProfileImage = localStorage.getItem('userProfileImage');
+      const storedAdvisory = localStorage.getItem('advisoryClass');
 
       if (storedName) setUserName(storedName);
       if (storedRole) setUserRole(storedRole);
       setUserProfileImage(storedProfileImage || null);
+      setAdvisoryClass(storedAdvisory || null);
     };
 
     syncProfile();
@@ -47,17 +54,35 @@ export default function DashboardLayout({ children }) {
     };
   }, []);
 
-  const activeItem = useMemo(() => {
-    const exact = NAV_ITEMS.find((item) => item.href === pathname);
-    if (exact) return exact;
-    const nested = NAV_ITEMS.find((item) => pathname?.startsWith(item.href + '/'));
-    return nested || NAV_ITEMS[0];
-  }, [pathname]);
+  const filteredNavItems = useMemo(() => {
+    const role = userRole.toLowerCase();
+    return NAV_ITEMS.filter(item => {
+      if (!item.allow.includes(role)) return false;
 
-  function handleLogout() {
+      // My Section is admin+teacher per `allow`, but admins only see it when
+      // they actually have an advisory_class assigned (otherwise the page is empty).
+      if (item.href === '/my-section' && role === 'admin') {
+        return Boolean(advisoryClass && advisoryClass.trim() !== '' && advisoryClass !== '-');
+      }
+
+      return true;
+    });
+  }, [userRole, advisoryClass]);
+
+  const activeItem = useMemo(() => {
+    const exact = filteredNavItems.find((item) => item.href === pathname);
+    if (exact) return exact;
+    const nested = filteredNavItems.find((item) => pathname?.startsWith(item.href + '/'));
+    return nested || filteredNavItems[0];
+  }, [pathname, filteredNavItems]);
+
+  async function handleLogout() {
+    const supabase = createClient();
+    await supabase.auth.signOut();
     localStorage.removeItem('userRole');
     localStorage.removeItem('userName');
     localStorage.removeItem('userId');
+    localStorage.removeItem('advisoryClass');
     sessionStorage.removeItem('resetEmail');
     sessionStorage.removeItem('resetToken');
     router.replace('/login');
@@ -82,7 +107,7 @@ export default function DashboardLayout({ children }) {
           </div>
 
           <nav className="navigation">
-            {NAV_ITEMS.map((item, index) => (
+            {filteredNavItems.map((item, index) => (
               <Link
                 key={item.href}
                 href={item.href}
@@ -121,7 +146,7 @@ export default function DashboardLayout({ children }) {
           <header className="content-header">
             <div className="header-info">
               <h2 className="page-title" id="pageTitle">
-                {activeItem?.label || 'Dashboard'}
+                {activeItem?.pageTitle || activeItem?.label || 'Dashboard'}
               </h2>
             </div>
 

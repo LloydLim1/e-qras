@@ -43,19 +43,27 @@ NEXT_PUBLIC_BACKEND_URL=http://localhost:4000
 #### Backend — create `backend/.env`:
 
 ```env
+PORT=4000
+CORS_ORIGIN=http://localhost:3000
+
 SUPABASE_URL=your_supabase_project_url
 SUPABASE_ANON_KEY=your_supabase_anon_key
+SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
 JWT_SECRET=a_long_random_secret_at_least_32_characters
-JWT_EXPIRES_IN_MINUTES=15
-CORS_ORIGIN=http://localhost:3000
-SMTP_HOST=your_smtp_host
-SMTP_PORT=587
+
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=465
+SMTP_SECURE=true
 SMTP_USER=your_smtp_username
 SMTP_PASS=your_smtp_password
-SMTP_FROM=no-reply@yourdomain.com
-SMTP_SECURE=false
+SMTP_FROM_NAME=E-QRAS System
+SMTP_FROM_EMAIL=no-reply@yourdomain.com
 SMTP_TLS_REJECT_UNAUTHORIZED=true
 ```
+
+> **Production note:** `CORS_ORIGIN` must be set when `NODE_ENV=production` — the
+> backend refuses to start otherwise. Use a comma-separated list for multiple
+> origins.
 
 ### 3. Install dependencies
 

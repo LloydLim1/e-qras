@@ -1,5 +1,6 @@
 // @ts-nocheck
 import React from 'react';
+import { createClient } from '@/utils/supabase/client';
 
 export default function LoginPage() {
     const [username, setUsername] = React.useState('');
@@ -19,31 +20,60 @@ export default function LoginPage() {
         setError('');
         setLoading(true);
 
-        const client = window.supabaseClient;
-        if (!client) {
-            setError('Database connection error. Check your configuration.');
-            setLoading(false);
-            return;
-        }
+        const supabase = createClient();
 
         try {
-            const usernameInput = username.trim();
-            const safeInput = usernameInput.replaceAll('\\', '\\\\').replaceAll('"', '\\"');
-            const { data: user, error: queryError } = await client
+            let loginEmail = username.trim();
+
+            // If it doesn't look like an email, ask the backend to resolve the
+            // username → email (no anon read on public.users under RLS).
+            if (!loginEmail.includes('@')) {
+                const lookupRes = await fetch('/api/auth/lookup-email', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ identifier: loginEmail }),
+                });
+                const lookup = await lookupRes.json().catch(() => ({}));
+                if (lookup?.email) loginEmail = lookup.email;
+            }
+
+            const { data, error: authError } = await supabase.auth.signInWithPassword({
+                email: loginEmail,
+                password: password,
+            });
+
+            if (authError) throw authError;
+
+            const user = data.user;
+            const metadata = user.user_metadata || {};
+
+            if (!metadata.role) {
+                await supabase.auth.signOut();
+                throw new Error('Your account is missing a role assignment. Please contact your administrator.');
+            }
+
+            // Update status to 'Active' on first successful login if invited.
+            if (metadata.status === 'Invited' || metadata.status === 'Pending') {
+                await supabase.from('users').update({ status: 'Active' }).eq('id', metadata.public_user_id || user.id);
+            }
+
+            // Still using localStorage for now to maintain compatibility with existing components
+            localStorage.setItem('userRole', metadata.role);
+            localStorage.setItem('userName', metadata.name || user.email);
+            localStorage.setItem('userId', metadata.public_user_id || user.id);
+            
+            // Handle advisory class - might need to fetch this from public.users if not in metadata
+            const { data: publicUser } = await supabase
                 .from('users')
-                .select('*')
-                .or(`username.eq."${safeInput}",email.eq."${safeInput}"`)
-                .maybeSingle();
+                .select('advisory_class')
+                .eq('id', metadata.public_user_id || user.id)
+                .single();
 
-            if (queryError) throw queryError;
-            if (!user) throw new Error('User not found.');
-
-            const isMatch = dcodeIO.bcrypt.compareSync(password, user.password);
-            if (!isMatch) throw new Error('Incorrect password.');
-
-            localStorage.setItem('userRole', user.role || 'admin');
-            localStorage.setItem('userName', user.full_name || user.username);
-            localStorage.setItem('userId', user.id);
+            if (publicUser?.advisory_class) {
+                localStorage.setItem('advisoryClass', publicUser.advisory_class);
+            } else {
+                localStorage.removeItem('advisoryClass');
+            }
 
             window.location.href = '/dashboard';
         } catch (err) {

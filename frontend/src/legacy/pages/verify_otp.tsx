@@ -41,28 +41,17 @@ export default function VerifyOtpPage() {
         setMessage('');
         setIsError(false);
 
-        const client = window.supabaseClient;
         try {
-            const { data: user, error } = await client
-                .from('users')
-                .select('id, otp_code, otp_expiry')
-                .eq('email', email)
-                .single();
-
-            if (error || !user) throw new Error('Verification failed. User data missing.');
-            if (user.otp_code !== otpCode) throw new Error('Invalid OTP code. Please try again.');
-
-            const now = new Date();
-            const expiry = new Date(user.otp_expiry);
-            if (now > expiry) throw new Error('OTP has expired. Please request a new one.');
-
-            const response = await fetch('/api/generate_token.php', {
+            const response = await fetch('/api/auth/verify-otp', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userId: user.id, email })
+                body: JSON.stringify({ email, otp: otpCode })
             });
-            const result = await response.json();
-            if (!result.token) throw new Error(result.error || 'Failed to generate security token.');
+            const result = await response.json().catch(() => ({}));
+
+            if (!response.ok || !result.success || !result.token) {
+                throw new Error(result.error || 'Verification failed.');
+            }
 
             sessionStorage.setItem('resetToken', result.token);
             setMessage('Verification successful!');

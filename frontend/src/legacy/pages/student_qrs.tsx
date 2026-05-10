@@ -37,6 +37,12 @@ export default function StudentQrsApp() {
             return;
         }
         initStudentQRsPage();
+
+        return () => {
+            // Reset on unmount so navigating away and back re-initializes correctly
+            studentQRsPageInitialized = false;
+            disconnectBarcodeObserver();
+        };
     }, []);
 
     return (
@@ -165,9 +171,9 @@ export default function StudentQrsApp() {
                             </p>
                             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                                 {[
-                                    { label: '+1 Year',   days: 365 },
+                                    { label: '+1 Year', days: 365 },
                                     { label: '+6 Months', days: 180 },
-                                    { label: '+30 Days',  days: 30  },
+                                    { label: '+30 Days', days: 30 },
                                 ].map(({ label, days }) => (
                                     <button
                                         key={days}
@@ -559,7 +565,7 @@ function applyFilters() {
 
     const filtered = allStudents.filter(s => {
         const matchesSearch = (s.first_name + ' ' + s.last_name).toLowerCase().includes(searchTerm) ||
-                              s.student_id.toLowerCase().includes(searchTerm);
+            s.student_id.toLowerCase().includes(searchTerm);
         const matchesSection = section === 'all' || s.section === section;
         const matchesGrade = grade === 'all' || s.grade_level === grade;
         return matchesSearch && matchesSection && matchesGrade;
