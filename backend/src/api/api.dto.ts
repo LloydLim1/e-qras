@@ -342,3 +342,27 @@ export class UpdateUserEmailDto {
   @IsEmail()
   email!: string;
 }
+
+// ─── Pre-login auth DTOs ──────────────────────────────────────────────────────
+
+export class LookupEmailDto {
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(254)
+  identifier!: string;
+}
+
+export class RequestPasswordResetDto {
+  @IsEmail()
+  email!: string;
+}
+
+export class VerifyOtpDto {
+  @IsEmail()
+  email!: string;
+
+  @IsString()
+  @Length(6, 6)
+  @Matches(/^\d{6}$/)
+  otp!: string;
+}

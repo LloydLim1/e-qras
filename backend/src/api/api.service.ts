@@ -241,6 +241,114 @@ export class ApiService {
     return { token };
   }
 
+  // ─── Pre-login flows (public, service-role) ───────────────────────────────
+  async lookupLoginEmail(identifier: string) {
+    const trimmed = (identifier || '').trim();
+    if (!trimmed) {
+      return { success: false, error: 'Identifier is required.' };
+    }
+
+    const isEmail = trimmed.includes('@');
+    const query = this.supabaseRead
+      .from('users')
+      .select('email')
+      .limit(1);
+
+    const { data, error } = isEmail
+      ? await query.ilike('email', trimmed)
+      : await query.eq('username', trimmed);
+
+    if (error) {
+      this.logger.error(`lookupLoginEmail failed for ${trimmed}: ${error.message}`);
+      return { success: false, error: 'Lookup failed.' };
+    }
+
+    const email = data?.[0]?.email || (isEmail ? trimmed : null);
+    if (!email) {
+      // Don't reveal whether the username exists.
+      return { success: true, email: null };
+    }
+
+    return { success: true, email };
+  }
+
+  async requestPasswordReset(email: string) {
+    const normalized = (email || '').trim().toLowerCase();
+    if (!normalized) {
+      return { success: false, error: 'Email is required.' };
+    }
+
+    const { data: user, error: lookupError } = await this.supabaseRead
+      .from('users')
+      .select('id, full_name, email')
+      .ilike('email', normalized)
+      .maybeSingle();
+
+    if (lookupError) {
+      this.logger.error(`requestPasswordReset lookup failed for ${normalized}: ${lookupError.message}`);
+      return { success: false, error: 'Lookup failed.' };
+    }
+
+    // Don't reveal whether the email is registered — but only attempt to send
+    // and store an OTP if the account actually exists.
+    if (!user) {
+      return { success: true };
+    }
+
+    const otp = String(Math.floor(100000 + Math.random() * 900000));
+    const expiry = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+
+    const { error: updateError } = await this.supabaseRead
+      .from('users')
+      .update({ otp_code: otp, otp_expiry: expiry })
+      .eq('id', user.id);
+
+    if (updateError) {
+      this.logger.error(`requestPasswordReset OTP store failed for ${normalized}: ${updateError.message}`);
+      return { success: false, error: 'Could not generate OTP.' };
+    }
+
+    const sendResult = await this.sendOtpEmail(user.email || normalized, otp);
+    if ((sendResult as any).error) {
+      return { success: false, error: (sendResult as any).error };
+    }
+
+    return { success: true };
+  }
+
+  async verifyPasswordResetOtp(email: string, otp: string) {
+    const normalized = (email || '').trim().toLowerCase();
+    if (!normalized || !otp) {
+      return { success: false, error: 'Email and OTP are required.' };
+    }
+
+    const { data: user, error } = await this.supabaseRead
+      .from('users')
+      .select('id, email, otp_code, otp_expiry')
+      .ilike('email', normalized)
+      .maybeSingle();
+
+    if (error) {
+      this.logger.error(`verifyPasswordResetOtp lookup failed for ${normalized}: ${error.message}`);
+      return { success: false, error: 'Verification failed.' };
+    }
+
+    if (!user || !user.otp_code) {
+      return { success: false, error: 'Invalid OTP code. Please try again.' };
+    }
+
+    if (user.otp_code !== otp) {
+      return { success: false, error: 'Invalid OTP code. Please try again.' };
+    }
+
+    if (!user.otp_expiry || new Date(user.otp_expiry) < new Date()) {
+      return { success: false, error: 'OTP has expired. Please request a new one.' };
+    }
+
+    const { token } = this.generateResetToken(String(user.id), user.email || normalized);
+    return { success: true, token };
+  }
+
   async completePasswordReset(token: string, newPassword: string) {
     let payload: ResetPayload;
 

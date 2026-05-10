@@ -4504,6 +4504,99 @@ body.page-ready .app-container {
     flex-shrink: 0;
 }
 
+.reports-calendar-legend-swatch--flag {
+    background: #fef3c7;
+    border-color: #b45309;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #b45309;
+}
+
+/* Cut-class flag UI */
+.cut-class-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    margin-right: 8px;
+    padding: 2px 6px 2px 5px;
+    border-radius: 9999px;
+    background: #fef3c7;
+    color: #b45309;
+    border: 1px solid #fcd34d;
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 1;
+    vertical-align: middle;
+}
+
+.cut-class-badge svg {
+    flex-shrink: 0;
+}
+
+.cut-class-badge-count {
+    font-size: 11px;
+}
+
+.reports-calendar-cell {
+    position: relative;
+}
+
+.reports-calendar-cell--clickable {
+    cursor: pointer;
+    user-select: none;
+}
+
+.reports-calendar-cell--clickable:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 6px rgba(17, 24, 39, 0.08);
+}
+
+.reports-calendar-cell--clickable:focus-visible {
+    outline: 2px solid #860108;
+    outline-offset: 2px;
+}
+
+.reports-calendar-cell--flagged {
+    box-shadow: inset 0 0 0 2px #b45309;
+}
+
+.reports-calendar-cell--busy {
+    opacity: 0.55;
+    pointer-events: none;
+}
+
+.reports-calendar-flag {
+    position: absolute;
+    top: 3px;
+    right: 3px;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: #b45309;
+    color: #fff;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+}
+
+.reports-modal-pill--flagged {
+    background: #fef3c7;
+}
+
+.reports-modal-pill--flagged .num,
+.reports-modal-pill--flagged .label {
+    color: #b45309;
+}
+
+.reports-modal-hint {
+    margin: 0 24px 8px;
+    font-size: 12px;
+    color: #6b7280;
+    font-style: italic;
+}
+
 /* Loading / error states */
 .reports-state {
     padding: 48px 20px;

@@ -65,6 +65,8 @@ export default function ReportsApp() {
     const [selectedStudent, setSelectedStudent] = useState(null);
     const [emailLoading, setEmailLoading] = useState(false);
     const [emailStatus, setEmailStatus] = useState(null); // { type, msg }
+    const [flagMap, setFlagMap] = useState({});      // student_id → { date: true }
+    const [flagBusy, setFlagBusy] = useState({});    // `${student_id}|${date}` → true
 
     const donutRef = useRef(null);
     const donutInstance = useRef(null);
@@ -163,18 +165,37 @@ export default function ReportsApp() {
                     .map(s => s.student_id);
 
                 if (ids.length === 0) {
-                    if (mounted) setAttendanceRecords([]);
+                    if (mounted) {
+                        setAttendanceRecords([]);
+                        setFlagMap({});
+                    }
                     return;
                 }
 
-                const { data, error: attErr } = await client
-                    .from('attendance')
-                    .select('student_id, scan_date, status')
-                    .in('student_id', ids)
-                    .gte('scan_date', startDate)
-                    .lte('scan_date', endDate);
+                const [attRes, flagRes] = await Promise.all([
+                    client
+                        .from('attendance')
+                        .select('student_id, scan_date, status')
+                        .in('student_id', ids)
+                        .gte('scan_date', startDate)
+                        .lte('scan_date', endDate),
+                    client
+                        .from('cut_class_flags')
+                        .select('student_id, flag_date')
+                        .in('student_id', ids)
+                        .gte('flag_date', startDate)
+                        .lte('flag_date', endDate)
+                ]);
 
-                if (mounted && !attErr) setAttendanceRecords(data || []);
+                if (!mounted) return;
+                if (!attRes.error) setAttendanceRecords(attRes.data || []);
+
+                const fm = {};
+                (flagRes.data || []).forEach(f => {
+                    if (!fm[f.student_id]) fm[f.student_id] = {};
+                    fm[f.student_id][f.flag_date] = true;
+                });
+                setFlagMap(fm);
             } catch (err) {
                 console.error('Attendance load error:', err);
             } finally {
@@ -211,14 +232,70 @@ export default function ReportsApp() {
     const studentRows = useMemo(() =>
         sectionStudents.map(s => {
             const records = studentRecordMap[s.student_id] || {};
+            const flags = flagMap[s.student_id] || {};
             return {
                 ...s,
                 totalAbsences: Object.values(records).filter(v => v === 'Absent').length,
                 totalLates: Object.values(records).filter(v => v === 'Late').length,
+                flagCount: Object.keys(flags).length,
             };
         }),
-        [sectionStudents, studentRecordMap]
+        [sectionStudents, studentRecordMap, flagMap]
     );
+
+    // ─── Toggle a cut-class flag for a student/date ─────────────────────────
+    const toggleFlag = async (studentId, date) => {
+        if (!studentId || !date) return;
+        const key = `${studentId}|${date}`;
+        if (flagBusy[key]) return;
+
+        const wasFlagged = !!(flagMap[studentId] && flagMap[studentId][date]);
+
+        setFlagBusy(b => ({ ...b, [key]: true }));
+        setFlagMap(prev => {
+            const next = { ...prev };
+            const inner = { ...(next[studentId] || {}) };
+            if (wasFlagged) delete inner[date];
+            else inner[date] = true;
+            next[studentId] = inner;
+            return next;
+        });
+
+        try {
+            const client = getClient();
+            if (!client) throw new Error('Supabase client is not ready.');
+            if (wasFlagged) {
+                const { error: delErr } = await client
+                    .from('cut_class_flags')
+                    .delete()
+                    .eq('student_id', studentId)
+                    .eq('flag_date', date);
+                if (delErr) throw delErr;
+            } else {
+                const { error: insErr } = await client
+                    .from('cut_class_flags')
+                    .insert({ student_id: studentId, flag_date: date });
+                if (insErr) throw insErr;
+            }
+        } catch (err) {
+            // Revert optimistic update on failure
+            setFlagMap(prev => {
+                const next = { ...prev };
+                const inner = { ...(next[studentId] || {}) };
+                if (wasFlagged) inner[date] = true;
+                else delete inner[date];
+                next[studentId] = inner;
+                return next;
+            });
+            console.error('Failed to toggle cut-class flag:', err);
+        } finally {
+            setFlagBusy(b => {
+                const c = { ...b };
+                delete c[key];
+                return c;
+            });
+        }
+    };
 
     const donutStats = useMemo(() => {
         let present = 0, late = 0, absent = 0;
@@ -796,7 +873,21 @@ export default function ReportsApp() {
                                         onClick={() => setSelectedStudent(s)}
                                         className="report-row"
                                     >
-                                        <td className="student-name">{s.last_name}, {s.first_name}</td>
+                                        <td className="student-name">
+                                            {s.flagCount > 0 && (
+                                                <span
+                                                    className="cut-class-badge"
+                                                    title={`Flagged for cutting class on ${s.flagCount} day${s.flagCount === 1 ? '' : 's'} this month`}
+                                                    aria-label={`Flagged for cutting class on ${s.flagCount} day${s.flagCount === 1 ? '' : 's'} this month`}
+                                                >
+                                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                                        <path d="M4 22V4"/><path d="M4 4h13l-2 4 2 4H4"/>
+                                                    </svg>
+                                                    <span className="cut-class-badge-count">{s.flagCount}</span>
+                                                </span>
+                                            )}
+                                            {s.last_name}, {s.first_name}
+                                        </td>
                                         <td className="col-center gender-cell">{s.gender || '—'}</td>
                                         <td className="col-center">
                                             <span className={`count-pill ${s.totalAbsences > 0 ? 'count-pill--absent' : ''}`}>
@@ -844,6 +935,7 @@ export default function ReportsApp() {
                                 { key: 'present', label: 'Present', count: Object.values(studentRecordMap[selectedStudent.student_id] || {}).filter(v => v === 'Present').length },
                                 { key: 'late', label: 'Late', count: selectedStudent.totalLates },
                                 { key: 'absent', label: 'Absent', count: selectedStudent.totalAbsences },
+                                { key: 'flagged', label: 'Cut Class', count: Object.keys(flagMap[selectedStudent.student_id] || {}).length },
                             ].map(({ key, label, count }) => (
                                 <div key={key} className={`reports-modal-pill reports-modal-pill--${key}`}>
                                     <div className="num">{count}</div>
@@ -851,6 +943,10 @@ export default function ReportsApp() {
                                 </div>
                             ))}
                         </div>
+
+                        <p className="reports-modal-hint">
+                            Click a day to flag/unflag it as a cut-class incident.
+                        </p>
 
                         <div className="reports-calendar">
                             {monthWeeks.length === 0 ? (
@@ -862,6 +958,7 @@ export default function ReportsApp() {
 
                                     {monthWeeks.map((week, wi) => {
                                         const records = studentRecordMap[selectedStudent.student_id] || {};
+                                        const studentFlags = flagMap[selectedStudent.student_id] || {};
                                         return (
                                             <React.Fragment key={wi}>
                                                 <div className="reports-calendar-week-label">W{wi + 1}</div>
@@ -876,12 +973,41 @@ export default function ReportsApp() {
                                                         else { modifier = 'norecord'; label = '·'; }
                                                     }
                                                     const dayNum = date ? date.split('-')[2] : '';
+                                                    const isFlagged = !!(date && studentFlags[date]);
+                                                    const busyKey = date ? `${selectedStudent.student_id}|${date}` : '';
+                                                    const isBusy = !!flagBusy[busyKey];
+                                                    const classes = [
+                                                        'reports-calendar-cell',
+                                                        `reports-calendar-cell--${modifier}`,
+                                                        date ? 'reports-calendar-cell--clickable' : '',
+                                                        isFlagged ? 'reports-calendar-cell--flagged' : '',
+                                                        isBusy ? 'reports-calendar-cell--busy' : '',
+                                                    ].filter(Boolean).join(' ');
+                                                    const titleParts = date
+                                                        ? [`${date}: ${status || 'No record'}`, isFlagged ? 'Flagged: cut class' : 'Click to flag as cut class']
+                                                        : [];
                                                     return (
                                                         <div
                                                             key={di}
-                                                            className={`reports-calendar-cell reports-calendar-cell--${modifier}`}
-                                                            title={date ? `${date}: ${status || 'No record'}` : ''}
+                                                            className={classes}
+                                                            title={titleParts.join(' • ')}
+                                                            role={date ? 'button' : undefined}
+                                                            tabIndex={date ? 0 : undefined}
+                                                            onClick={date ? () => toggleFlag(selectedStudent.student_id, date) : undefined}
+                                                            onKeyDown={date ? (e) => {
+                                                                if (e.key === 'Enter' || e.key === ' ') {
+                                                                    e.preventDefault();
+                                                                    toggleFlag(selectedStudent.student_id, date);
+                                                                }
+                                                            } : undefined}
                                                         >
+                                                            {isFlagged && (
+                                                                <span className="reports-calendar-flag" aria-hidden="true">
+                                                                    <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
+                                                                        <path d="M4 22V4h13l-2 4 2 4H4"/>
+                                                                    </svg>
+                                                                </span>
+                                                            )}
                                                             <div className="day">{dayNum || '·'}</div>
                                                             <div className="mark">{label || '·'}</div>
                                                         </div>
@@ -909,6 +1035,12 @@ export default function ReportsApp() {
                                 <span className="reports-calendar-legend-item" style={{ color: '#9ca3af' }}>
                                     <span className="reports-calendar-legend-swatch" style={{ background: '#fafafa' }} />
                                     · – No record
+                                </span>
+                                <span className="reports-calendar-legend-item" style={{ color: '#b45309' }}>
+                                    <span className="reports-calendar-legend-swatch reports-calendar-legend-swatch--flag">
+                                        <svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor"><path d="M4 22V4h13l-2 4 2 4H4"/></svg>
+                                    </span>
+                                    ⚑ – Cut class (teacher flag)
                                 </span>
                             </div>
                         </div>

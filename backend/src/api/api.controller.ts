@@ -17,12 +17,15 @@ import {
   CompleteResetDto,
   CreateUserDto,
   GenerateTokenDto,
+  LookupEmailDto,
+  RequestPasswordResetDto,
   ResetUserPasswordDto,
   StudentsQueryDto,
   SendAttendanceDto,
   SendOtpDto,
   SendInviteDto,
   UpdateUserEmailDto,
+  VerifyOtpDto,
 } from './api.dto';
 
 @Controller('api')
@@ -63,6 +66,27 @@ export class ApiController {
   @Throttle({ default: { limit: 4, ttl: 60_000 } })
   async sendOtp(@Body() body: SendOtpDto) {
     return this.apiService.sendOtpEmail(body.email, body.otp);
+  }
+
+  @Post('auth/lookup-email')
+  @Public()
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
+  async lookupEmail(@Body() body: LookupEmailDto) {
+    return this.apiService.lookupLoginEmail(body.identifier);
+  }
+
+  @Post('auth/request-password-reset')
+  @Public()
+  @Throttle({ default: { limit: 4, ttl: 60_000 } })
+  async requestPasswordReset(@Body() body: RequestPasswordResetDto) {
+    return this.apiService.requestPasswordReset(body.email);
+  }
+
+  @Post('auth/verify-otp')
+  @Public()
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  async verifyOtp(@Body() body: VerifyOtpDto) {
+    return this.apiService.verifyPasswordResetOtp(body.email, body.otp);
   }
 
   @Post(['send_attendance_email.php', 'send-attendance-email'])

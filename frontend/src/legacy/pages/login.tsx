@@ -24,18 +24,17 @@ export default function LoginPage() {
 
         try {
             let loginEmail = username.trim();
-            
-            // If it doesn't look like an email, try to find the email by username
+
+            // If it doesn't look like an email, ask the backend to resolve the
+            // username → email (no anon read on public.users under RLS).
             if (!loginEmail.includes('@')) {
-                const { data: userData, error: userError } = await supabase
-                    .from('users')
-                    .select('email')
-                    .eq('username', loginEmail)
-                    .maybeSingle();
-                
-                if (userData?.email) {
-                    loginEmail = userData.email;
-                }
+                const lookupRes = await fetch('/api/auth/lookup-email', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ identifier: loginEmail }),
+                });
+                const lookup = await lookupRes.json().catch(() => ({}));
+                if (lookup?.email) loginEmail = lookup.email;
             }
 
             const { data, error: authError } = await supabase.auth.signInWithPassword({
