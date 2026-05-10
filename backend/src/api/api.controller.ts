@@ -16,13 +16,11 @@ import { SupabaseGuard, Roles, Public } from '../auth/supabase.guard';
 import {
   CompleteResetDto,
   CreateUserDto,
-  GenerateTokenDto,
   LookupEmailDto,
   RequestPasswordResetDto,
   ResetUserPasswordDto,
   StudentsQueryDto,
   SendAttendanceDto,
-  SendOtpDto,
   SendInviteDto,
   UpdateUserEmailDto,
   VerifyOtpDto,
@@ -47,25 +45,11 @@ export class ApiController {
     return this.apiService.getStudentsSummary();
   }
 
-  @Post(['generate_token.php', 'generate-token'])
-  @Public()
-  @Throttle({ default: { limit: 6, ttl: 60_000 } })
-  generateToken(@Body() body: GenerateTokenDto) {
-    return this.apiService.generateResetToken(body.userId, body.email);
-  }
-
   @Post(['complete_reset.php', 'complete-reset'])
   @Public()
   @Throttle({ default: { limit: 6, ttl: 60_000 } })
   async completeReset(@Body() body: CompleteResetDto) {
     return this.apiService.completePasswordReset(body.token, body.newPassword);
-  }
-
-  @Post(['send_otp.php', 'send-otp'])
-  @Public()
-  @Throttle({ default: { limit: 4, ttl: 60_000 } })
-  async sendOtp(@Body() body: SendOtpDto) {
-    return this.apiService.sendOtpEmail(body.email, body.otp);
   }
 
   @Post('auth/lookup-email')

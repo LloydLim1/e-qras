@@ -47,16 +47,18 @@ export default function LoginPage() {
             const user = data.user;
             const metadata = user.user_metadata || {};
 
-            // Update status to 'Active' on first successful login if invited
-            // We can do this via an RPC or a protected backend route if needed, 
-            // but for now let's maintain the existing flow via client if possible.
-            // Note: RLS must allow this update.
+            if (!metadata.role) {
+                await supabase.auth.signOut();
+                throw new Error('Your account is missing a role assignment. Please contact your administrator.');
+            }
+
+            // Update status to 'Active' on first successful login if invited.
             if (metadata.status === 'Invited' || metadata.status === 'Pending') {
                 await supabase.from('users').update({ status: 'Active' }).eq('id', metadata.public_user_id || user.id);
             }
 
             // Still using localStorage for now to maintain compatibility with existing components
-            localStorage.setItem('userRole', metadata.role || 'admin');
+            localStorage.setItem('userRole', metadata.role);
             localStorage.setItem('userName', metadata.name || user.email);
             localStorage.setItem('userId', metadata.public_user_id || user.id);
             

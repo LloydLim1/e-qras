@@ -16,16 +16,6 @@ import { Type } from 'class-transformer';
 
 // ─── Existing DTOs ────────────────────────────────────────────────────────────
 
-export class GenerateTokenDto {
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(128)
-  userId!: string;
-
-  @IsEmail()
-  email!: string;
-}
-
 export class CompleteResetDto {
   @IsString()
   @IsNotEmpty()
@@ -37,16 +27,6 @@ export class CompleteResetDto {
   @MinLength(8)
   @MaxLength(128)
   newPassword!: string;
-}
-
-export class SendOtpDto {
-  @IsEmail()
-  email!: string;
-
-  @IsString()
-  @Length(6, 6)
-  @Matches(/^\d{6}$/)
-  otp!: string;
 }
 
 export class SendAttendanceDto {

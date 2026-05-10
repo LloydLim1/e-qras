@@ -23,8 +23,19 @@ export default function DashboardAuthGuard() {
 
       // Sync metadata to localStorage for legacy components
       const metadata = user.user_metadata || {};
+
+      if (!metadata.role) {
+        await supabase.auth.signOut();
+        localStorage.removeItem('userRole');
+        localStorage.removeItem('userName');
+        localStorage.removeItem('userId');
+        localStorage.removeItem('advisoryClass');
+        window.location.replace('/login');
+        return;
+      }
+
       if (!localStorage.getItem('userId')) {
-        localStorage.setItem('userRole', metadata.role || 'admin');
+        localStorage.setItem('userRole', metadata.role);
         localStorage.setItem('userName', metadata.name || user.email);
         localStorage.setItem('userId', metadata.public_user_id || user.id);
       }
