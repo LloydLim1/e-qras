@@ -31,6 +31,13 @@ async function bootstrap() {
     .map((item) => item.trim())
     .filter(Boolean);
 
+  const isProduction = process.env.NODE_ENV === 'production';
+  if (isProduction && allowedOrigins.length === 0) {
+    throw new Error(
+      'CORS_ORIGIN must be set in production (comma-separated list of allowed origins).'
+    );
+  }
+
   app.enableCors({
     origin: allowedOrigins.length > 0 ? allowedOrigins : true,
     credentials: true
