@@ -8,16 +8,19 @@ import BodyClassManager from '@/components/BodyClassManager';
 import DashboardAuthGuard from '@/components/DashboardAuthGuard';
 import { createClient } from '@/utils/supabase/client';
 
+// `allow` mirrors the middleware role rules (src/utils/supabase/middleware.ts).
+// Keep them in sync — if a route's middleware rule changes, update the nav
+// entry too, otherwise users will see a link that immediately redirects.
 const NAV_ITEMS = [
-  { href: '/dashboard', label: 'Dashboard', icon: 'fa-solid fa-chart-line' },
-  { href: '/attendance', label: 'Attendance', icon: 'fa-solid fa-clipboard-check' },
-  { href: '/user-management', label: 'Users', pageTitle: 'User Management', icon: 'fa-solid fa-users-gear' },
-  { href: '/import', label: 'Import', icon: 'fa-solid fa-file-import' },
-  { href: '/my-section', label: 'My Section', icon: 'fa-solid fa-users' },
-  { href: '/qr-scanner', label: 'QR Scanner', icon: 'fa-solid fa-qrcode' },
-  { href: '/reports', label: 'Reports', icon: 'fa-solid fa-chart-column' },
-  { href: '/student-qrs', label: 'Student QRs', icon: 'fa-solid fa-id-card' },
-  { href: '/settings', label: 'Settings', icon: 'fa-solid fa-gear' }
+  { href: '/dashboard',       label: 'Dashboard',   icon: 'fa-solid fa-chart-line',     allow: ['admin', 'teacher', 'guard'] },
+  { href: '/attendance',      label: 'Attendance',  icon: 'fa-solid fa-clipboard-check', allow: ['admin', 'teacher'] },
+  { href: '/user-management', label: 'Users',       pageTitle: 'User Management', icon: 'fa-solid fa-users-gear', allow: ['admin'] },
+  { href: '/import',          label: 'Import',      icon: 'fa-solid fa-file-import',    allow: ['admin'] },
+  { href: '/my-section',      label: 'My Section',  icon: 'fa-solid fa-users',          allow: ['admin', 'teacher'] },
+  { href: '/qr-scanner',      label: 'QR Scanner',  icon: 'fa-solid fa-qrcode',         allow: ['admin', 'guard'] },
+  { href: '/reports',         label: 'Reports',     icon: 'fa-solid fa-chart-column',   allow: ['admin', 'teacher'] },
+  { href: '/student-qrs',     label: 'Student QRs', icon: 'fa-solid fa-id-card',        allow: ['admin', 'teacher'] },
+  { href: '/settings',        label: 'Settings',    icon: 'fa-solid fa-gear',           allow: ['admin', 'teacher', 'guard'] }
 ];
 
 export default function DashboardLayout({ children }) {
@@ -52,16 +55,16 @@ export default function DashboardLayout({ children }) {
   }, []);
 
   const filteredNavItems = useMemo(() => {
+    const role = userRole.toLowerCase();
     return NAV_ITEMS.filter(item => {
-      if (item.href === '/my-section') {
-        const role = userRole.toLowerCase();
-        if (role === 'teacher') return true;
-        if (role === 'admin') {
-          return advisoryClass && advisoryClass.trim() !== '' && advisoryClass !== '-';
-        }
-        return false;
+      if (!item.allow.includes(role)) return false;
+
+      // My Section is admin+teacher per `allow`, but admins only see it when
+      // they actually have an advisory_class assigned (otherwise the page is empty).
+      if (item.href === '/my-section' && role === 'admin') {
+        return Boolean(advisoryClass && advisoryClass.trim() !== '' && advisoryClass !== '-');
       }
-      // Assuming Guards shouldn't see certain things, but the user only requested 'My Section' condition.
+
       return true;
     });
   }, [userRole, advisoryClass]);

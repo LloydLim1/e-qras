@@ -150,8 +150,15 @@ export default function UserManagementApp() {
     const [reactivateModalUser, setReactivateModalUser] = React.useState(null);
     const [isReactivating, setIsReactivating] = React.useState(false);
 
+    // Delete Modal States
+    const [deleteModalUser, setDeleteModalUser] = React.useState(null);
+    const [deleteConfirmInput, setDeleteConfirmInput] = React.useState('');
+    const [isDeleting, setIsDeleting] = React.useState(false);
+
     // Global Popup State
     const [popupMessage, setPopupMessage] = React.useState(null);
+
+    const currentUserId = typeof window !== 'undefined' ? localStorage.getItem('userId') : null;
 
     // Load users
     const fetchUsers = React.useCallback(async () => {
@@ -281,6 +288,36 @@ export default function UserManagementApp() {
             setPopupMessage({ type: 'error', text: 'Failed to reactivate user.' });
         } finally {
             setIsReactivating(false);
+        }
+    }
+
+    function openDeleteModal(user) {
+        setDeleteModalUser(user);
+        setDeleteConfirmInput('');
+    }
+
+    async function confirmDeleteUser() {
+        if (!deleteModalUser) return;
+        if (deleteConfirmInput.trim() !== (deleteModalUser.full_name || '').trim()) {
+            setPopupMessage({ type: 'error', text: 'Confirmation text does not match the user\'s full name.' });
+            return;
+        }
+        setIsDeleting(true);
+        try {
+            const result = await apiFetch(`/api/users/${deleteModalUser.id}`, {
+                method: 'DELETE',
+            });
+            if (result.success === false) throw new Error(result.error || 'Failed to delete user.');
+
+            setUsers(users.filter(u => u.id !== deleteModalUser.id));
+            setPopupMessage({ type: 'success', text: `User ${deleteModalUser.full_name} has been permanently deleted.` });
+            setDeleteModalUser(null);
+            setDeleteConfirmInput('');
+        } catch (err) {
+            console.error('Error deleting user:', err);
+            setPopupMessage({ type: 'error', text: err.message || 'Failed to delete user.' });
+        } finally {
+            setIsDeleting(false);
         }
     }
 
@@ -539,6 +576,18 @@ export default function UserManagementApp() {
                                                         )}
                                                         {status === 'Deactivated' ? 'Activate User' : 'Deactivate User'}
                                                     </button>
+
+                                                    {String(user.id) !== String(currentUserId) && (
+                                                        <button
+                                                            onClick={(e) => { e.stopPropagation(); openDeleteModal(user); setOpenDropdownId(null); }}
+                                                            style={{ width: '100%', padding: '10px 16px', background: 'none', border: 'none', textAlign: 'left', fontSize: '13px', cursor: 'pointer', color: '#7f1d1d', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px' }}
+                                                            onMouseEnter={e => e.currentTarget.style.backgroundColor = '#fef2f2'}
+                                                            onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+                                                        >
+                                                            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-2 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"></path></svg>
+                                                            Delete User
+                                                        </button>
+                                                    )}
                                                 </div>
                                             )}
                                         </td>
@@ -759,6 +808,80 @@ export default function UserManagementApp() {
                                     </svg>
                                 )}
                                 {isReactivating ? 'Reactivating...' : 'Reactivate User'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Delete User Modal */}
+            {deleteModalUser && (
+                <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1050 }}>
+                    <div style={{ background: '#fff', borderRadius: '12px', width: '100%', maxWidth: '460px', padding: '32px 24px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}>
+                        <h3 style={{ fontSize: '20px', fontWeight: 'bold', margin: '0 0 12px', color: '#7f1d1d' }}>Delete {deleteModalUser.full_name}?</h3>
+                        <p style={{ fontSize: '14px', color: '#6b7280', margin: '0 0 20px', lineHeight: '1.5' }}>
+                            This permanently removes the user's login and profile. Attendance records and other history they're referenced in will remain, but their account cannot be recovered. Consider <strong>Deactivate</strong> instead if you might re-enable them later.
+                        </p>
+
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', border: '1px solid #fecaca', backgroundColor: '#fef2f2', borderRadius: '8px', marginBottom: '20px' }}>
+                            {deleteModalUser.profile_image ? (
+                                <img src={deleteModalUser.profile_image} alt={deleteModalUser.full_name} style={{ width: '40px', height: '40px', borderRadius: '50%', objectFit: 'cover' }} />
+                            ) : (
+                                <div style={{ width: '40px', height: '40px', borderRadius: '50%', backgroundColor: '#fecaca', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#7f1d1d', fontWeight: 'bold', fontSize: '16px' }}>
+                                    {deleteModalUser.first_name?.[0]}{deleteModalUser.last_name?.[0]}
+                                </div>
+                            )}
+                            <div>
+                                <div style={{ fontWeight: '600', color: '#111827', fontSize: '15px' }}>{deleteModalUser.full_name}</div>
+                                <div style={{ color: '#6b7280', fontSize: '13px' }}>{deleteModalUser.email}</div>
+                            </div>
+                        </div>
+
+                        <div style={{ marginBottom: '24px' }}>
+                            <label style={{ display: 'block', fontSize: '13px', color: '#374151', marginBottom: '6px' }}>
+                                Type <strong>{deleteModalUser.full_name}</strong> to confirm:
+                            </label>
+                            <input
+                                type="text"
+                                value={deleteConfirmInput}
+                                onChange={e => setDeleteConfirmInput(e.target.value)}
+                                placeholder={deleteModalUser.full_name}
+                                style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #d1d5db', boxSizing: 'border-box', fontSize: '14px' }}
+                                autoFocus
+                            />
+                        </div>
+
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+                            <button
+                                onClick={() => { setDeleteModalUser(null); setDeleteConfirmInput(''); }}
+                                style={{ padding: '10px 16px', background: 'transparent', border: '1px solid #d1d5db', color: '#374151', borderRadius: '8px', fontWeight: '500', cursor: 'pointer' }}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={confirmDeleteUser}
+                                disabled={isDeleting || deleteConfirmInput.trim() !== (deleteModalUser.full_name || '').trim()}
+                                style={{
+                                    padding: '10px 16px',
+                                    background: '#7f1d1d',
+                                    color: '#fff',
+                                    border: 'none',
+                                    borderRadius: '8px',
+                                    fontWeight: '500',
+                                    cursor: 'pointer',
+                                    opacity: (isDeleting || deleteConfirmInput.trim() !== (deleteModalUser.full_name || '').trim()) ? 0.5 : 1,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '8px'
+                                }}
+                            >
+                                {isDeleting && (
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ animation: 'spin 1s linear infinite' }}>
+                                        <line x1="12" y1="2" x2="12" y2="6"></line><line x1="12" y1="18" x2="12" y2="22"></line><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line><line x1="2" y1="12" x2="6" y2="12"></line><line x1="18" y1="12" x2="22" y2="12"></line><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line>
+                                        <style>{`@keyframes spin { 100% { transform: rotate(360deg); } }`}</style>
+                                    </svg>
+                                )}
+                                {isDeleting ? 'Deleting...' : 'Permanently Delete'}
                             </button>
                         </div>
                     </div>

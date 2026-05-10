@@ -1,6 +1,8 @@
 // @ts-nocheck
 import React from 'react';
 import { createClient } from '@/utils/supabase/client';
+import ChangePasswordSection from '@/components/ChangePasswordSection';
+import PersonalProfileSection from '@/components/PersonalProfileSection';
 
 /* Auto-extracted from settings.php */
 
@@ -56,42 +58,7 @@ export default function SettingsApp() {
             </div>
 
             <div className="settings-grid">
-                <div className="settings-card">
-                    <div className="settings-card-header">
-                        <h3 className="settings-card-title">Personal Profile</h3>
-                        <button type="button" className="edit-btn" id="editPersonalBtn">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path>
-                                <path d="m15 5 4 4"></path>
-                            </svg>
-                            Edit
-                        </button>
-                    </div>
-                    <form className="settings-form" id="personalProfileForm">
-                        <div className="form-group">
-                            <label htmlFor="firstName" className="form-label">First Name</label>
-                            <input type="text" id="firstName" className="form-input" placeholder="Enter first name" disabled />
-                        </div>
-                        <div className="form-group">
-                            <label htmlFor="lastName" className="form-label">Last Name</label>
-                            <input type="text" id="lastName" className="form-input" placeholder="Enter last name" disabled />
-                        </div>
-                        <div className="form-group">
-                            <label htmlFor="phoneNumber" className="form-label">Phone Number</label>
-                            <input type="tel" id="phoneNumber" className="form-input" placeholder="Enter phone number" disabled />
-                        </div>
-                        <div className="form-group">
-                            <label htmlFor="address" className="form-label">Address</label>
-                            <textarea id="address" className="form-input form-textarea" rows="3" placeholder="Enter address" disabled></textarea>
-                        </div>
-                        <button type="button" className="save-btn" id="savePersonalBtn" style={{ display: 'none' }}>
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <polyline points="20 6 9 17 4 12"></polyline>
-                            </svg>
-                            Save Changes
-                        </button>
-                    </form>
-                </div>
+                <PersonalProfileSection />
 
                 <div className="settings-card">
                     <h3 className="settings-card-title">Account Profile</h3>
@@ -101,36 +68,7 @@ export default function SettingsApp() {
                             <input type="email" id="email" className="form-input" placeholder="Enter email address" />
                         </div>
 
-                        <div className="password-section">
-                            <h4 className="password-section-title">Change Password</h4>
-                            <div className="form-group">
-                                <label htmlFor="currentPassword" className="form-label">Current Password</label>
-                                <div className="password-input-wrapper">
-                                    <input type="password" id="currentPassword" className="form-input" placeholder="Enter current password" />
-                                    <button type="button" className="password-toggle" data-target="currentPassword">
-                                        <svg className="eye-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                                            <circle cx="12" cy="12" r="3"></circle>
-                                        </svg>
-                                    </button>
-                                </div>
-                            </div>
-                            <div className="form-group">
-                                <label htmlFor="confirmPassword" className="form-label">Confirm Password</label>
-                                <div className="password-input-wrapper">
-                                    <input type="password" id="confirmPassword" className="form-input" placeholder="Confirm new password" />
-                                    <button type="button" className="password-toggle" data-target="confirmPassword">
-                                        <svg className="eye-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                                            <circle cx="12" cy="12" r="3"></circle>
-                                        </svg>
-                                    </button>
-                                </div>
-                            </div>
-                            <button type="button" className="update-password-btn" id="updatePasswordBtn">
-                                Update Password
-                            </button>
-                        </div>
+                        <ChangePasswordSection />
                     </form>
                 </div>
             </div>
@@ -189,10 +127,6 @@ async function initSettingsPage() {
     }
 
     const els = {
-        firstName: document.getElementById('firstName'),
-        lastName: document.getElementById('lastName'),
-        phone: document.getElementById('phoneNumber'),
-        address: document.getElementById('address'),
         email: document.getElementById('email'),
         userName: document.getElementById('settingsUserName'),
         userRole: document.getElementById('settingsUserRole'),
@@ -206,12 +140,6 @@ async function initSettingsPage() {
         cropZoomRange: document.getElementById('cropZoomRange'),
         cancelCropBtn: document.getElementById('cancelCropBtn'),
         saveCropBtn: document.getElementById('saveCropBtn'),
-        editBtn: document.getElementById('editPersonalBtn'),
-        saveBtn: document.getElementById('savePersonalBtn'),
-        currentPass: document.getElementById('currentPassword'),
-        confirmPass: document.getElementById('confirmPassword'),
-        updatePassBtn: document.getElementById('updatePasswordBtn'),
-        passwordToggles: document.querySelectorAll('.password-toggle')
     };
 
     const setLoading = (btn, isLoading, text) => {
@@ -338,10 +266,6 @@ async function initSettingsPage() {
                 const last = user.last_name || '';
                 const fullName = user.full_name || `${first} ${last}`.trim();
 
-                if (els.firstName) els.firstName.value = first;
-                if (els.lastName) els.lastName.value = last;
-                if (els.phone) els.phone.value = user.phone || user.phone_number || '';
-                if (els.address) els.address.value = user.address || '';
                 if (els.email) els.email.value = user.email || '';
                 if (els.userName) els.userName.textContent = fullName || 'User';
                 if (els.userRole) {
@@ -382,62 +306,8 @@ async function initSettingsPage() {
 
     await loadProfile();
 
-    if (els.editBtn) {
-        els.editBtn.addEventListener('click', () => {
-            const isDisabled = els.firstName.disabled;
-            const fields = [els.firstName, els.lastName, els.phone, els.address];
-            fields.forEach(f => f.disabled = !isDisabled);
-
-            els.saveBtn.style.display = isDisabled ? 'inline-flex' : 'none';
-            els.editBtn.innerHTML = isDisabled ?
-                '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg> Cancel' :
-                '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path><path d="m15 5 4 4"></path></svg> Edit';
-        });
-    }
-
-    if (els.saveBtn) {
-        els.saveBtn.addEventListener('click', async () => {
-            const first = els.firstName.value.trim();
-            const last = els.lastName.value.trim();
-            const full_name = (first + ' ' + last).trim();
-
-            setLoading(els.saveBtn, true);
-
-            const updates = {
-                full_name: full_name,
-                first_name: first,
-                last_name: last,
-                phone: els.phone.value.trim(),
-                address: els.address.value.trim()
-            };
-
-            try {
-                if (!publicUserId) throw new Error('User profile not loaded');
-                const { error } = await supabase
-                    .from('users')
-                    .update(updates)
-                    .eq('id', publicUserId);
-
-                if (error) throw error;
-
-                showSuccessToast('Profile successfully updated');
-
-                [els.firstName, els.lastName, els.phone, els.address].forEach(f => f.disabled = true);
-                els.saveBtn.style.display = 'none';
-                els.editBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path><path d="m15 5 4 4"></path></svg> Edit';
-
-                els.userName.textContent = full_name;
-                localStorage.setItem('userName', full_name);
-                window.dispatchEvent(new CustomEvent('user-profile-updated'));
-
-            } catch (err) {
-                console.error('Update error:', err);
-                alert('Failed to update profile: ' + err.message);
-            } finally {
-                setLoading(els.saveBtn, false);
-            }
-        });
-    }
+    // Personal Profile is now handled by <PersonalProfileSection /> — see
+    // src/components/PersonalProfileSection.tsx
 
     if (els.changePicBtn && els.avatarInput) {
         els.changePicBtn.addEventListener('click', () => els.avatarInput.click());
@@ -566,59 +436,8 @@ async function initSettingsPage() {
         });
     }
 
-    if (els.updatePassBtn) {
-        els.updatePassBtn.addEventListener('click', async () => {
-            const current = els.currentPass.value;
-            const newPass = els.confirmPass.value;
-
-            if (!current || !newPass) {
-                alert('Please enter both current and new passwords.');
-                return;
-            }
-
-            setLoading(els.updatePassBtn, true, 'Updating...');
-
-            try {
-                const { error: signInError } = await supabase.auth.signInWithPassword({
-                    email: authUser.email,
-                    password: current,
-                });
-
-                if (signInError) {
-                    alert('Current password is incorrect.');
-                    setLoading(els.updatePassBtn, false);
-                    return;
-                }
-
-                const { error: updateError } = await supabase.auth.updateUser({
-                    password: newPass,
-                });
-
-                if (updateError) throw updateError;
-
-                showSuccessToast('Password successfully updated');
-                els.currentPass.value = '';
-                els.confirmPass.value = '';
-
-            } catch (err) {
-                console.error('Password update error:', err);
-                alert('Failed to update password: ' + err.message);
-            } finally {
-                setLoading(els.updatePassBtn, false);
-            }
-        });
-    }
-
-    els.passwordToggles.forEach(btn => {
-        btn.addEventListener('click', function() {
-            const targetId = this.dataset.target;
-            const input = document.getElementById(targetId);
-            if (input) {
-                const type = input.type === 'password' ? 'text' : 'password';
-                input.type = type;
-            }
-        });
-    });
+    // Password change is now handled by <ChangePasswordSection /> (a self-
+    // contained React component) — see src/components/ChangePasswordSection.tsx
 }
 
 
