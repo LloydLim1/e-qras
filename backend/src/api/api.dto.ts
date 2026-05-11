@@ -29,6 +29,23 @@ export class CompleteResetDto {
   newPassword!: string;
 }
 
+export class ForcePasswordChangeDto {
+  @IsEmail()
+  email!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  @MinLength(8)
+  @MaxLength(128)
+  currentPassword!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  @MinLength(8)
+  @MaxLength(128)
+  newPassword!: string;
+}
+
 export class SendAttendanceDto {
   @IsEmail()
   parent_email!: string;
