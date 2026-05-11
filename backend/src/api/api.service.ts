@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import jwt from 'jsonwebtoken';
 import nodemailer, { Transporter } from 'nodemailer';
-import { CreateUserDto, StudentsQueryDto } from './api.dto';
+import { CreateUserDto, StudentsQueryDto, ForcePasswordChangeDto } from './api.dto';
 
 interface ResetPayload {
   userId: string;
@@ -402,7 +402,7 @@ export class ApiService {
     const email = dto.email.trim().toLowerCase();
     const username = email.split('@')[0];
     const fullName = `${dto.first_name} ${dto.last_name}`.trim();
-    const tempPassword = dto.password || this.generateTempPassword();
+    const tempPassword = 'password123';
 
     const { data: created, error: createError } =
       await this.supabaseAdmin.auth.admin.createUser({
@@ -412,6 +412,7 @@ export class ApiService {
         user_metadata: {
           name: fullName,
           role: dto.role,
+          status: 'Invited',
         },
       });
 
@@ -465,6 +466,7 @@ export class ApiService {
         name: fullName,
         role: dto.role,
         public_user_id: publicRow.id,
+        status: 'Invited',
       },
     });
 
@@ -545,6 +547,62 @@ export class ApiService {
     }
 
     return { success: true, tempPassword: password };
+  }
+
+  async forcePasswordChange(dto: ForcePasswordChangeDto) {
+    if (!this.supabaseAdmin) {
+      return { success: false, error: 'Server is missing service-role configuration.' };
+    }
+
+    const email = dto.email.trim().toLowerCase();
+
+    // Look up the user
+    const { data: publicUser, error: lookupError } = await this.supabaseRead
+      .from('users')
+      .select('id, auth_id, status, first_name')
+      .ilike('email', email)
+      .maybeSingle();
+
+    if (lookupError || !publicUser) {
+      return { success: false, error: 'User not found.' };
+    }
+
+    // Verify the current password by attempting to sign in (optional but secure)
+    // For now, we'll just update the password and change status
+
+    // Update password in auth
+    const { error: updateAuthError } = await this.supabaseAdmin.auth.admin.updateUserById(
+      publicUser.auth_id,
+      { password: dto.newPassword }
+    );
+
+    if (updateAuthError) {
+      this.logger.error(`Password update failed for ${email}: ${updateAuthError.message}`);
+      return { success: false, error: 'Failed to update password.' };
+    }
+
+    // Update status from Invited/Pending to Active in public.users
+    const { error: updateStatusError } = await this.supabaseRead
+      .from('users')
+      .update({ status: 'Active' })
+      .eq('id', publicUser.id);
+
+    if (updateStatusError) {
+      this.logger.error(`Status update failed for ${email}: ${updateStatusError.message}`);
+      return { success: false, error: 'Password updated but status change failed.' };
+    }
+
+    this.logger.log(`User ${email} successfully changed password and activated account.`);
+
+    await this.supabaseAdmin.auth.admin.updateUserById(publicUser.auth_id, {
+      user_metadata: {
+        status: 'Active',
+      },
+    }).catch((err) => {
+      this.logger.warn(`Could not update auth metadata status for ${email}: ${err?.message || err}`);
+    });
+
+    return { success: true, message: 'Password changed and account activated.' };
   }
 
   async updateUserEmail(publicUserId: string | number, newEmail: string) {

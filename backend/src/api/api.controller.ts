@@ -16,6 +16,7 @@ import { SupabaseGuard, Roles, Public } from '../auth/supabase.guard';
 import {
   CompleteResetDto,
   CreateUserDto,
+  ForcePasswordChangeDto,
   LookupEmailDto,
   RequestPasswordResetDto,
   ResetUserPasswordDto,
@@ -71,6 +72,13 @@ export class ApiController {
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   async verifyOtp(@Body() body: VerifyOtpDto) {
     return this.apiService.verifyPasswordResetOtp(body.email, body.otp);
+  }
+
+  @Post('auth/force-password-change')
+  @Public()
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  async forcePasswordChange(@Body() body: ForcePasswordChangeDto) {
+    return this.apiService.forcePasswordChange(body);
   }
 
   @Post(['send_attendance_email.php', 'send-attendance-email'])

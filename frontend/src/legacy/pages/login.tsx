@@ -52,9 +52,24 @@ export default function LoginPage() {
                 throw new Error('Your account is missing a role assignment. Please contact your administrator.');
             }
 
-            // Update status to 'Active' on first successful login if invited.
-            if (metadata.status === 'Invited' || metadata.status === 'Pending') {
-                await supabase.from('users').update({ status: 'Active' }).eq('id', metadata.public_user_id || user.id);
+            const { data: publicUser } = await supabase
+                .from('users')
+                .select('id, status, advisory_class')
+                .eq('auth_id', user.id)
+                .maybeSingle();
+
+            const accountStatus = publicUser?.status || metadata.status;
+
+            // Check if user is in "Invited" status - force password change
+            if (accountStatus === 'Invited' || accountStatus === 'Pending') {
+                sessionStorage.setItem('tempEmail', loginEmail);
+                sessionStorage.setItem('tempPassword', password);
+                sessionStorage.setItem('tempName', metadata.name || user.email);
+
+                await supabase.auth.signOut();
+
+                window.location.replace('/force-password-change');
+                return;
             }
 
             // Still using localStorage for now to maintain compatibility with existing components
@@ -63,12 +78,6 @@ export default function LoginPage() {
             localStorage.setItem('userId', metadata.public_user_id || user.id);
             
             // Handle advisory class - might need to fetch this from public.users if not in metadata
-            const { data: publicUser } = await supabase
-                .from('users')
-                .select('advisory_class')
-                .eq('id', metadata.public_user_id || user.id)
-                .single();
-
             if (publicUser?.advisory_class) {
                 localStorage.setItem('advisoryClass', publicUser.advisory_class);
             } else {
