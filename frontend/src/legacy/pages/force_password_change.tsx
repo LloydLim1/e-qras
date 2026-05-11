@@ -11,13 +11,18 @@ export default function ForcePasswordChangePage() {
     const [success, setSuccess] = React.useState('');
     const [loading, setLoading] = React.useState(false);
 
-    const tempEmail = sessionStorage.getItem('tempEmail');
-    const tempPassword = sessionStorage.getItem('tempPassword');
-    const tempName = sessionStorage.getItem('tempName');
+    const [tempEmail, setTempEmail] = React.useState('');
+    const [tempPassword, setTempPassword] = React.useState('');
+    const [tempName, setTempName] = React.useState('');
 
     React.useEffect(() => {
-        // Redirect to login if no temp session
-        if (!tempEmail || !tempPassword) {
+        const email = sessionStorage.getItem('tempEmail') || '';
+        const password = sessionStorage.getItem('tempPassword') || '';
+        const name = sessionStorage.getItem('tempName') || '';
+        setTempEmail(email);
+        setTempPassword(password);
+        setTempName(name);
+        if (!email || !password) {
             window.location.replace('/login');
         }
     }, []);

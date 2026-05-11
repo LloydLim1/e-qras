@@ -26,20 +26,42 @@ async function bootstrap() {
     })
   );
 
-  const allowedOrigins = (process.env.CORS_ORIGIN || '')
+  const corsEntries = (process.env.CORS_ORIGIN || '')
     .split(',')
     .map((item) => item.trim())
     .filter(Boolean);
 
   const isProduction = process.env.NODE_ENV === 'production';
-  if (isProduction && allowedOrigins.length === 0) {
+  if (isProduction && corsEntries.length === 0) {
     throw new Error(
-      'CORS_ORIGIN must be set in production (comma-separated list of allowed origins).'
+      'CORS_ORIGIN must be set in production (comma-separated list of allowed origins; supports /regex/ syntax).'
     );
   }
 
+  // Entries wrapped in /.../ are treated as regex (useful for *.vercel.app preview URLs).
+  const exactOrigins: string[] = [];
+  const regexOrigins: RegExp[] = [];
+  for (const entry of corsEntries) {
+    if (entry.startsWith('/') && entry.lastIndexOf('/') > 0) {
+      const lastSlash = entry.lastIndexOf('/');
+      const pattern = entry.slice(1, lastSlash);
+      const flags = entry.slice(lastSlash + 1);
+      regexOrigins.push(new RegExp(pattern, flags));
+    } else {
+      exactOrigins.push(entry);
+    }
+  }
+
   app.enableCors({
-    origin: allowedOrigins.length > 0 ? allowedOrigins : true,
+    origin: corsEntries.length === 0
+      ? true
+      : (origin, callback) => {
+          // Allow same-origin / curl / server-to-server (no Origin header)
+          if (!origin) return callback(null, true);
+          if (exactOrigins.includes(origin)) return callback(null, true);
+          if (regexOrigins.some((rx) => rx.test(origin))) return callback(null, true);
+          return callback(new Error(`Origin ${origin} not allowed by CORS`), false);
+        },
     credentials: true
   });
 

@@ -150,29 +150,51 @@ The app expects the following tables in your Supabase project:
 
 ## Deploy (Vercel + Render)
 
+Both apps target Node 20 (see `.nvmrc` and `engines` in each `package.json`).
+
 ### Frontend on Vercel
 
-1. Import `frontend` as the project root in Vercel.
-2. Set env vars:
+1. In Vercel, **Import Project** → select this repo.
+2. **Root Directory:** `frontend`.
+3. Framework preset: **Next.js** (auto-detected).
+4. Environment variables:
 	- `NEXT_PUBLIC_SUPABASE_URL`
 	- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-	- `NEXT_PUBLIC_BACKEND_URL` (your Render backend URL)
-3. Build command: `npm run build`
-4. Output: Next.js default output.
+	- `NEXT_PUBLIC_BACKEND_URL` — your Render backend URL (e.g. `https://eqras-backend.onrender.com`)
+5. Deploy. Vercel uses `npm run build` and the default `.next` output.
 
 ### Backend on Render
 
-1. Create a new Web Service with root directory `backend`.
-2. Build command: `npm install && npm run build`
-3. Start command: `npm run start:prod`
-4. Set all backend env vars from `backend/.env.example` plus your real values.
-5. Set `CORS_ORIGIN` to your Vercel domain (and local URL if needed for testing).
+You can either use the included **`render.yaml` Blueprint** (recommended) or create the service manually.
+
+**Option A — Blueprint (one-click):**
+
+1. In Render, **New +** → **Blueprint** → connect this repo. Render reads `render.yaml`.
+2. Render generates `JWT_SECRET` for you. Fill in the other secrets in the dashboard (they're marked `sync: false`):
+	- `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`
+	- All `SMTP_*` values
+	- `CORS_ORIGIN` — see below
+3. Deploy.
+
+**Option B — manual:**
+
+1. **New Web Service** → connect repo. **Root Directory:** `backend`. **Runtime:** Node.
+2. Build: `npm ci && npm run build` · Start: `npm run start:prod` · Health check path: `/health`.
+3. Set the same env vars as `backend/.env.example` (with real values).
+
+**CORS_ORIGIN format** — comma-separated, with optional `/regex/` entries for Vercel preview URLs:
+
+```
+https://eqras.vercel.app,/^https:\/\/eqras-[a-z0-9-]+\.vercel\.app$/
+```
+
+The first entry is your production Vercel domain; the regex matches preview deploys.
 
 ### Post-deploy smoke tests
 
-1. `GET /api/students?page=1&limit=10`
-2. `GET /api/students/summary`
-3. OTP endpoint with a test account (only after SMTP is configured)
+1. `curl https://<backend>.onrender.com/health` → `{"status":"ok"}`
+2. From the Vercel-hosted UI: log in, then hit a page that calls `/api/students`.
+3. OTP endpoint with a test account (only after SMTP is configured).
 
 ---
 

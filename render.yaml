@@ -1,0 +1,49 @@
+# Render Blueprint — backend deploy for E-QRAS
+# Usage: in Render, "New +" → "Blueprint" → point at this repo.
+# Frontend is deployed separately on Vercel (root directory: frontend).
+
+services:
+  - type: web
+    name: eqras-backend
+    runtime: node
+    plan: starter
+    rootDir: backend
+    region: singapore
+    buildCommand: npm ci && npm run build
+    startCommand: npm run start:prod
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 4000
+      # Set this in the Render dashboard to your Vercel domain(s).
+      # Supports comma-separated values and /regex/ entries, e.g.:
+      #   https://eqras.vercel.app,/^https:\/\/eqras-.*\.vercel\.app$/
+      - key: CORS_ORIGIN
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        sync: false
+      - key: SMTP_SECURE
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: SMTP_FROM_NAME
+        sync: false
+      - key: SMTP_FROM_EMAIL
+        sync: false
+      - key: SMTP_TLS_REJECT_UNAUTHORIZED
+        value: "true"
