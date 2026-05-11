@@ -67,6 +67,14 @@ export default function ReportsApp() {
     const [emailStatus, setEmailStatus] = useState(null); // { type, msg }
     const [flagMap, setFlagMap] = useState({});      // student_id → { date: true }
     const [flagBusy, setFlagBusy] = useState({});    // `${student_id}|${date}` → true
+    const [userRole, setUserRole] = useState('');
+
+    useEffect(() => {
+        const stored = (typeof window !== 'undefined' && localStorage.getItem('userRole')) || '';
+        setUserRole(stored.toLowerCase());
+    }, []);
+
+    const canFlagCutClass = userRole !== 'admin';
 
     const donutRef = useRef(null);
     const donutInstance = useRef(null);
@@ -246,6 +254,7 @@ export default function ReportsApp() {
     // ─── Toggle a cut-class flag for a student/date ─────────────────────────
     const toggleFlag = async (studentId, date) => {
         if (!studentId || !date) return;
+        if (!canFlagCutClass) return;
         const key = `${studentId}|${date}`;
         if (flagBusy[key]) return;
 
@@ -944,9 +953,15 @@ export default function ReportsApp() {
                             ))}
                         </div>
 
-                        <p className="reports-modal-hint">
-                            Click a day to flag/unflag it as a cut-class incident.
-                        </p>
+                        {canFlagCutClass ? (
+                            <p className="reports-modal-hint">
+                                Click a day to flag/unflag it as a cut-class incident.
+                            </p>
+                        ) : (
+                            <p className="reports-modal-hint">
+                                Cut-class flags are managed by section teachers. Admins can view but not edit them here.
+                            </p>
+                        )}
 
                         <div className="reports-calendar">
                             {monthWeeks.length === 0 ? (
@@ -976,25 +991,31 @@ export default function ReportsApp() {
                                                     const isFlagged = !!(date && studentFlags[date]);
                                                     const busyKey = date ? `${selectedStudent.student_id}|${date}` : '';
                                                     const isBusy = !!flagBusy[busyKey];
+                                                    const cellInteractive = !!date && canFlagCutClass;
                                                     const classes = [
                                                         'reports-calendar-cell',
                                                         `reports-calendar-cell--${modifier}`,
-                                                        date ? 'reports-calendar-cell--clickable' : '',
+                                                        cellInteractive ? 'reports-calendar-cell--clickable' : '',
                                                         isFlagged ? 'reports-calendar-cell--flagged' : '',
                                                         isBusy ? 'reports-calendar-cell--busy' : '',
                                                     ].filter(Boolean).join(' ');
                                                     const titleParts = date
-                                                        ? [`${date}: ${status || 'No record'}`, isFlagged ? 'Flagged: cut class' : 'Click to flag as cut class']
+                                                        ? [
+                                                            `${date}: ${status || 'No record'}`,
+                                                            isFlagged
+                                                                ? 'Flagged: cut class'
+                                                                : (canFlagCutClass ? 'Click to flag as cut class' : '')
+                                                          ].filter(Boolean)
                                                         : [];
                                                     return (
                                                         <div
                                                             key={di}
                                                             className={classes}
                                                             title={titleParts.join(' • ')}
-                                                            role={date ? 'button' : undefined}
-                                                            tabIndex={date ? 0 : undefined}
-                                                            onClick={date ? () => toggleFlag(selectedStudent.student_id, date) : undefined}
-                                                            onKeyDown={date ? (e) => {
+                                                            role={cellInteractive ? 'button' : undefined}
+                                                            tabIndex={cellInteractive ? 0 : undefined}
+                                                            onClick={cellInteractive ? () => toggleFlag(selectedStudent.student_id, date) : undefined}
+                                                            onKeyDown={cellInteractive ? (e) => {
                                                                 if (e.key === 'Enter' || e.key === ' ') {
                                                                     e.preventDefault();
                                                                     toggleFlag(selectedStudent.student_id, date);
