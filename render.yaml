@@ -9,7 +9,7 @@ services:
     plan: starter
     rootDir: backend
     region: singapore
-    buildCommand: npm install && npm run build
+    buildCommand: npm install && npx nest build
     startCommand: npm run start:prod
     healthCheckPath: /health
     autoDeploy: true
