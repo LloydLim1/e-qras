@@ -657,7 +657,6 @@ export default function AttendanceApp() {
                                     )}
                                 </div>
 
-                                <button className="generate-summary-btn">Generate Summary</button>
                             </div>
                         </div>
                     </>
