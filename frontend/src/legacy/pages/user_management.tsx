@@ -224,7 +224,7 @@ export default function UserManagementApp() {
     async function handleSubmit(e) {
         e.preventDefault();
         if (!personType || !firstName || !lastName || !email || !birthday || !sex) return setPopupMessage({ type: 'error', text: 'Please fill in all required fields.' });
-        if ((personType === 'teacher' || personType === 'admin') && advisoryClasses.length === 0) return setPopupMessage({ type: 'error', text: 'Please select at least one advisory class.' });
+        if (personType === 'teacher' && advisoryClasses.length === 0) return setPopupMessage({ type: 'error', text: 'Please select at least one advisory class.' });
 
         setSubmitting(true);
         try {
@@ -627,7 +627,7 @@ export default function UserManagementApp() {
 
                                     {(personType === 'teacher' || personType === 'admin') && (
                                         <div className="form-group">
-                                            <label className="form-label">Advisory Class <span style={{fontSize: '11px', color: '#9ca3af', fontWeight: 'normal'}}>(select one or more {personType === 'admin' ? '- optional' : ''})</span></label>
+                                            <label className="form-label">Advisory Class {personType === 'teacher' && <span style={{fontSize: '11px', color: '#9ca3af', fontWeight: 'normal'}}>(required)</span>} {personType === 'admin' && <span style={{fontSize: '11px', color: '#9ca3af', fontWeight: 'normal'}}>(optional)</span>}</label>
                                             <MultiSelectDropdown options={classOptions} selected={advisoryClasses} onChange={setAdvisoryClasses} placeholder="Select Advisory Class(es)" />
                                         </div>
                                     )}
