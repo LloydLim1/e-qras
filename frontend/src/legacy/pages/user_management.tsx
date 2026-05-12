@@ -625,9 +625,9 @@ export default function UserManagementApp() {
                                         </div>
                                     </div>
 
-                                    {(personType === 'teacher' || personType === 'admin') && (
+                                    {personType === 'teacher' && (
                                         <div className="form-group">
-                                            <label className="form-label">Advisory Class <span style={{fontSize: '11px', color: '#9ca3af', fontWeight: 'normal'}}>(select one or more {personType === 'admin' ? '- optional' : ''})</span></label>
+                                            <label className="form-label">Advisory Class <span style={{fontSize: '11px', color: '#9ca3af', fontWeight: 'normal'}}>(select one or more)</span></label>
                                             <MultiSelectDropdown options={classOptions} selected={advisoryClasses} onChange={setAdvisoryClasses} placeholder="Select Advisory Class(es)" />
                                         </div>
                                     )}
