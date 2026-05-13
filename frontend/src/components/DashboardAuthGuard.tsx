@@ -4,57 +4,83 @@
 import { useEffect } from 'react';
 import { createClient } from '@/utils/supabase/client';
 
+const clearUserData = () => {
+  localStorage.removeItem('userRole');
+  localStorage.removeItem('userName');
+  localStorage.removeItem('userId');
+  localStorage.removeItem('advisoryClass');
+};
+
 export default function DashboardAuthGuard() {
   useEffect(() => {
+    let isMounted = true;
+    let redirectTimeout: NodeJS.Timeout | null = null;
+
     const supabase = createClient();
 
     const syncSession = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      
-      if (!user) {
-        // Clear local storage if no session
-        localStorage.removeItem('userRole');
-        localStorage.removeItem('userName');
-        localStorage.removeItem('userId');
-        localStorage.removeItem('advisoryClass');
-        window.location.replace('/login');
-        return;
-      }
+      if (!isMounted) return;
 
-      // Sync metadata to localStorage for legacy components
-      const metadata = user.user_metadata || {};
+      try {
+        const { data: { user }, error } = await supabase.auth.getUser();
 
-      if (!metadata.role) {
-        await supabase.auth.signOut();
-        localStorage.removeItem('userRole');
-        localStorage.removeItem('userName');
-        localStorage.removeItem('userId');
-        localStorage.removeItem('advisoryClass');
-        window.location.replace('/login');
-        return;
-      }
+        if (error || !user) {
+          clearUserData();
+          if (isMounted && !window.location.pathname.includes('/login')) {
+            redirectTimeout = setTimeout(() => {
+              if (isMounted) window.location.replace('/login');
+            }, 100);
+          }
+          return;
+        }
 
-      if (!localStorage.getItem('userId')) {
-        localStorage.setItem('userRole', metadata.role);
-        localStorage.setItem('userName', metadata.name || user.email);
-        localStorage.setItem('userId', metadata.public_user_id || user.id);
+        const metadata = user.user_metadata || {};
+
+        if (!metadata.role) {
+          await supabase.auth.signOut();
+          clearUserData();
+          if (isMounted) {
+            redirectTimeout = setTimeout(() => {
+              if (isMounted) window.location.replace('/login');
+            }, 100);
+          }
+          return;
+        }
+
+        if (!localStorage.getItem('userId')) {
+          localStorage.setItem('userRole', metadata.role);
+          localStorage.setItem('userName', metadata.name || user.email);
+          localStorage.setItem('userId', metadata.public_user_id || user.id);
+        }
+      } catch (error) {
+        console.error('[E-QRAS] Auth sync error:', error);
+        clearUserData();
       }
     };
 
     syncSession();
 
     // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (!isMounted) return;
+
       if (event === 'SIGNED_OUT') {
-        localStorage.removeItem('userRole');
-        localStorage.removeItem('userName');
-        localStorage.removeItem('userId');
-        localStorage.removeItem('advisoryClass');
-        window.location.replace('/login');
+        clearUserData();
+        if (!window.location.pathname.includes('/login')) {
+          redirectTimeout = setTimeout(() => {
+            if (isMounted) window.location.replace('/login');
+          }, 100);
+        }
+      } else if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {
+        await syncSession();
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      isMounted = false;
+      subscription?.unsubscribe();
+      if (redirectTimeout) clearTimeout(redirectTimeout);
+    };
   }, []);
 
   return null;
