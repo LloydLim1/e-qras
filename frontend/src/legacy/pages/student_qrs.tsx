@@ -402,8 +402,16 @@ async function fetchStudentsViaApi() {
         let page = 1;
         let collected = [];
 
+        // Attach session token so SupabaseGuard accepts the request
+        const client = window.supabaseClient;
+        const session = client ? (await client.auth.getSession()).data?.session : null;
+        const authHeaders: Record<string, string> = {
+            'Content-Type': 'application/json',
+            ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+        };
+
         while (page < 20) {
-            const response = await fetch(`/api/students?page=${page}&limit=${limit}`);
+            const response = await fetch(`/api/students?page=${page}&limit=${limit}`, { headers: authHeaders });
             const payload = await response.json();
 
             if (!response.ok || !payload || payload.success === false) {

@@ -20,6 +20,7 @@ import {
   LookupEmailDto,
   RequestPasswordResetDto,
   ResetUserPasswordDto,
+  SendReportEmailDto,
   StudentsQueryDto,
   SendAttendanceDto,
   SendInviteDto,
@@ -134,5 +135,18 @@ export class ApiController {
   async updateUserEmail(@Param('id') id: string, @Body() body: UpdateUserEmailDto) {
     if (!id) throw new BadRequestException('id is required');
     return this.apiService.updateUserEmail(id, body.email);
+  }
+
+  @Post('send-report-email')
+  @Roles('admin', 'teacher')
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  async sendReportEmail(@Body() body: SendReportEmailDto) {
+    return this.apiService.sendReportEmail({
+      teacherEmail: body.teacher_email,
+      teacherName: body.teacher_name,
+      section: body.section,
+      month: body.month,
+      csvBase64: body.csv_content,
+    });
   }
 }
