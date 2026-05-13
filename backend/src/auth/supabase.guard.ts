@@ -24,6 +24,7 @@ export class SupabaseGuard implements CanActivate {
     this.supabase = createClient(
       process.env.SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } },
     );
   }
 
@@ -47,13 +48,16 @@ export class SupabaseGuard implements CanActivate {
     const token = authHeader.split(' ')[1];
 
     // Validate the JWT against Supabase
-    const { data: { user }, error } = await this.supabase.auth.getUser(token);
-
-    if (error || !user) {
+    let user: any = null;
+    try {
+      const { data, error } = await this.supabase.auth.getUser(token);
+      if (error || !data?.user) throw new UnauthorizedException('Invalid or expired session token');
+      user = data.user;
+    } catch (err) {
+      if (err instanceof UnauthorizedException || err instanceof ForbiddenException) throw err;
       throw new UnauthorizedException('Invalid or expired session token');
     }
 
-    // Attach user to request for use in controllers
     request.user = {
       id: user.id,
       email: user.email,
