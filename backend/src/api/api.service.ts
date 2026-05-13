@@ -47,8 +47,9 @@ export class ApiService {
 
     const supabaseServiceRoleKey = this.configService.get<string>('SUPABASE_SERVICE_ROLE_KEY');
 
+    const serverOpts = { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } };
     this.supabase = createClient(supabaseUrl, supabaseAnonKey);
-    this.supabaseRead = createClient(supabaseUrl, supabaseServiceRoleKey || supabaseAnonKey);
+    this.supabaseRead = createClient(supabaseUrl, supabaseServiceRoleKey || supabaseAnonKey, serverOpts);
     this.supabaseAdmin = supabaseServiceRoleKey
       ? createClient(supabaseUrl, supabaseServiceRoleKey, { auth: { persistSession: false } })
       : null;
@@ -399,6 +400,7 @@ export class ApiService {
       return { success: false, error: 'Server is missing service-role configuration.' };
     }
 
+    try {
     const email = dto.email.trim().toLowerCase();
     const username = email.split('@')[0];
     const fullName = `${dto.first_name} ${dto.last_name}`.trim();
@@ -477,6 +479,11 @@ export class ApiService {
     }
 
     return { success: true, data: publicRow };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unexpected error during user creation.';
+      this.logger.error(`createUser unexpected error: ${message}`);
+      return { success: false, error: message };
+    }
   }
 
   async deleteUser(publicUserId: string | number) {
@@ -484,37 +491,37 @@ export class ApiService {
       return { success: false, error: 'Server is missing service-role configuration.' };
     }
 
-    const { data: row, error: lookupError } = await this.supabaseRead
-      .from('users')
-      .select('auth_id')
-      .eq('id', publicUserId)
-      .maybeSingle();
+    try {
+      const { data: row, error: lookupError } = await this.supabaseRead
+        .from('users')
+        .select('auth_id')
+        .eq('id', publicUserId)
+        .maybeSingle();
 
-    if (lookupError) {
-      return { success: false, error: lookupError.message };
-    }
-    if (!row) {
-      return { success: false, error: 'User not found.' };
-    }
+      if (lookupError) return { success: false, error: lookupError.message };
+      if (!row) return { success: false, error: 'User not found.' };
 
-    if (row.auth_id) {
-      const { error: authError } = await this.supabaseAdmin.auth.admin.deleteUser(row.auth_id);
-      if (authError && !/User not found/i.test(authError.message)) {
-        this.logger.error(`Auth delete failed for user ${publicUserId}: ${authError.message}`);
-        return { success: false, error: authError.message };
+      if (row.auth_id) {
+        const { error: authError } = await this.supabaseAdmin.auth.admin.deleteUser(row.auth_id);
+        if (authError && !/User not found/i.test(authError.message)) {
+          this.logger.error(`Auth delete failed for user ${publicUserId}: ${authError.message}`);
+          return { success: false, error: authError.message };
+        }
       }
+
+      const { error: deleteError } = await this.supabaseRead
+        .from('users')
+        .delete()
+        .eq('id', publicUserId);
+
+      if (deleteError) return { success: false, error: deleteError.message };
+
+      return { success: true };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unexpected error during user deletion.';
+      this.logger.error(`deleteUser unexpected error: ${message}`);
+      return { success: false, error: message };
     }
-
-    const { error: deleteError } = await this.supabaseRead
-      .from('users')
-      .delete()
-      .eq('id', publicUserId);
-
-    if (deleteError) {
-      return { success: false, error: deleteError.message };
-    }
-
-    return { success: true };
   }
 
   async resetUserPassword(publicUserId: string | number, newPassword?: string) {
@@ -610,53 +617,87 @@ export class ApiService {
       return { success: false, error: 'Server is missing service-role configuration.' };
     }
 
-    const email = newEmail.trim().toLowerCase();
-    const username = email.split('@')[0];
+    try {
+      const email = newEmail.trim().toLowerCase();
+      const username = email.split('@')[0];
 
-    const { data: row, error: lookupError } = await this.supabaseRead
-      .from('users')
-      .select('auth_id')
-      .eq('id', publicUserId)
-      .maybeSingle();
+      const { data: row, error: lookupError } = await this.supabaseRead
+        .from('users')
+        .select('auth_id')
+        .eq('id', publicUserId)
+        .maybeSingle();
 
-    if (lookupError || !row) {
-      return { success: false, error: lookupError?.message || 'User not found.' };
-    }
-    if (!row.auth_id) {
-      return { success: false, error: 'User is not linked to an authentication record.' };
-    }
+      if (lookupError || !row) return { success: false, error: lookupError?.message || 'User not found.' };
+      if (!row.auth_id) return { success: false, error: 'User is not linked to an authentication record.' };
 
-    const { error: authError } = await this.supabaseAdmin.auth.admin.updateUserById(
-      row.auth_id,
-      { email, email_confirm: true }
-    );
-
-    if (authError) {
-      const conflict = /already.*registered|already.*been used|duplicate/i.test(authError.message);
-      return {
-        success: false,
-        error: conflict ? 'A user with this email already exists.' : authError.message,
-      };
-    }
-
-    const { error: updateError } = await this.supabaseRead
-      .from('users')
-      .update({ email, username })
-      .eq('id', publicUserId);
-
-    if (updateError) {
-      this.logger.error(
-        `updateUserEmail: public.users update failed for ${publicUserId} after auth was changed: ${updateError.message}`
+      const { error: authError } = await this.supabaseAdmin.auth.admin.updateUserById(
+        row.auth_id,
+        { email, email_confirm: true }
       );
-      const code = (updateError as any)?.code;
-      const friendly =
-        code === '23505'
-          ? 'A user with this email or username already exists.'
-          : updateError.message;
-      return { success: false, error: friendly };
-    }
 
-    return { success: true, email, username };
+      if (authError) {
+        const conflict = /already.*registered|already.*been used|duplicate/i.test(authError.message);
+        return { success: false, error: conflict ? 'A user with this email already exists.' : authError.message };
+      }
+
+      const { error: updateError } = await this.supabaseRead
+        .from('users')
+        .update({ email, username })
+        .eq('id', publicUserId);
+
+      if (updateError) {
+        this.logger.error(`updateUserEmail: DB update failed for ${publicUserId}: ${updateError.message}`);
+        const code = (updateError as any)?.code;
+        return { success: false, error: code === '23505' ? 'A user with this email already exists.' : updateError.message };
+      }
+
+      return { success: true, email, username };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unexpected error updating email.';
+      this.logger.error(`updateUserEmail unexpected error: ${message}`);
+      return { success: false, error: message };
+    }
+  }
+
+  async sendReportEmail(payload: {
+    teacherEmail: string;
+    teacherName: string;
+    section: string;
+    month: string;
+    csvBase64: string;
+  }) {
+    try {
+      if (!this.smtpUser || !this.smtpPass) {
+        return { success: false, error: 'SMTP is not configured.' };
+      }
+
+      const csvBuffer = Buffer.from(payload.csvBase64, 'base64');
+      const filename = `attendance_${payload.section.replace(/\s+/g, '_')}_${payload.month}.csv`;
+      const transporter = this.createTransporter();
+
+      await transporter.sendMail({
+        from: `${this.smtpFromName} <${this.smtpFromEmail}>`,
+        to: payload.teacherEmail,
+        subject: `Attendance Report — ${payload.section} (${payload.month})`,
+        html: `
+          <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #ddd; border-radius: 10px; color: #333;">
+            <h2 style="color: #860108;">Attendance Report</h2>
+            <p>Dear ${payload.teacherName},</p>
+            <p>Please find attached the attendance report for <strong>${payload.section}</strong> for <strong>${payload.month}</strong>.</p>
+            <p>Thank you,<br/>The E-QRAS Team</p>
+            <hr style="border: 0; border-top: 1px solid #eee;" />
+            <p style="font-size: 12px; color: #666;">This is an automated message. Please do not reply.</p>
+          </div>
+        `,
+        attachments: [{ filename, content: csvBuffer, contentType: 'text/csv' }],
+      });
+
+      return { success: true };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to send report email.';
+      this.logger.error(`sendReportEmail failed for ${payload.teacherEmail}: ${message}`);
+      return { success: false, error: message };
+    }
   }
 
   private generateTempPassword(): string {

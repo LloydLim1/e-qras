@@ -77,6 +77,9 @@ export default function StudentQrsApp() {
                 </div>
 
                 <div className="grid-top-actions">
+                    <button type="button" className="select-all-btn" id="selectAllBtn" onClick={selectAll}>
+                        <span>Select All</span>
+                    </button>
                     <button type="button" className="deselect-all-btn" id="deselectAllBtn" onClick={clearSelection}>
                         <span>Deselect All</span>
                     </button>
@@ -239,6 +242,7 @@ export default function StudentQrsApp() {
 
 
 let allStudents = [];
+let displayedStudents = [];
 let filterDebounceTimer = null;
 let barcodeObserver = null;
 let studentBarcodesPageInitialized = false;
@@ -398,8 +402,16 @@ async function fetchStudentsViaApi() {
         let page = 1;
         let collected = [];
 
+        // Attach session token so SupabaseGuard accepts the request
+        const client = window.supabaseClient;
+        const session = client ? (await client.auth.getSession()).data?.session : null;
+        const authHeaders: Record<string, string> = {
+            'Content-Type': 'application/json',
+            ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+        };
+
         while (page < 20) {
-            const response = await fetch(`/api/students?page=${page}&limit=${limit}`);
+            const response = await fetch(`/api/students?page=${page}&limit=${limit}`, { headers: authHeaders });
             const payload = await response.json();
 
             if (!response.ok || !payload || payload.success === false) {
@@ -429,6 +441,7 @@ async function fetchStudentsViaApi() {
 }
 
 function renderGrid(students) {
+    displayedStudents = students;
     const grid = document.getElementById('studentGrid');
     disconnectBarcodeObserver();
     if (students.length === 0) {
@@ -509,9 +522,18 @@ function toggleStudentSelection(studentId, forcedState = null) {
     updateSelectionUI();
 }
 
+function selectAll() {
+    displayedStudents.forEach(s => {
+        selectedStudentIds.add(s.student_id);
+        const card = document.getElementById(`card-${s.student_id}`);
+        if (card) card.classList.add('selected');
+    });
+    updateSelectionUI();
+}
+
 function clearSelection() {
     selectedStudentIds.clear();
-    document.querySelectorAll('.qr-card.selected').forEach(card => {
+    document.querySelectorAll('.barcode-card.selected').forEach(card => {
         card.classList.remove('selected');
     });
     updateSelectionUI();

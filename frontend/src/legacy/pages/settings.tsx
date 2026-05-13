@@ -119,12 +119,15 @@ async function initSettingsPage() {
         return;
     }
 
-    const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
-    if (authError || !authUser) {
-        console.log('No user logged in, redirecting...');
+    // Use getSession() (reads local cache, no network) to avoid racing with
+    // DashboardAuthGuard's concurrent getUser() call, which can trigger a
+    // token refresh and cause a false "no user" redirect.
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user) {
         window.location.href = '/login';
         return;
     }
+    const authUser = session.user;
 
     const els = {
         email: document.getElementById('email'),

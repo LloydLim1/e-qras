@@ -54,7 +54,7 @@ export default function LoginPage() {
 
             const { data: publicUser } = await supabase
                 .from('users')
-                .select('id, status, advisory_class')
+                .select('id, status, advisory_class, full_name, first_name, last_name')
                 .eq('auth_id', user.id)
                 .maybeSingle();
 
@@ -74,7 +74,11 @@ export default function LoginPage() {
 
             // Still using localStorage for now to maintain compatibility with existing components
             localStorage.setItem('userRole', metadata.role);
-            localStorage.setItem('userName', metadata.name || user.email);
+            const dbName = publicUser?.full_name ||
+                (publicUser?.first_name
+                    ? `${publicUser.first_name} ${publicUser.last_name || ''}`.trim()
+                    : null);
+            localStorage.setItem('userName', dbName || metadata.name || user.email);
             localStorage.setItem('userId', metadata.public_user_id || user.id);
             
             // Handle advisory class - might need to fetch this from public.users if not in metadata

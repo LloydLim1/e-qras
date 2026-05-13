@@ -43,6 +43,7 @@ export default function QrScannerApp() {
   const processingRef = React.useRef(false);
   const resetTimerRef = React.useRef(null);
   const lastScannedRef = React.useRef(null);
+  const scanCooldownRef = React.useRef(0);
   const hwBufferRef = React.useRef('');
   const hwTimerRef = React.useRef(null);
   const soundRefs = React.useRef({ already: null, success: null, error: null });
@@ -51,7 +52,7 @@ export default function QrScannerApp() {
   React.useEffect(() => {
     soundRefs.current.already = Object.assign(new Audio('/sounds/Scanned.mp3'), { preload: 'auto' });
     soundRefs.current.success = Object.assign(new Audio('/sounds/Success.mp3'), { preload: 'auto' });
-    soundRefs.current.error   = Object.assign(new Audio('/sounds/fahhhhh.mp3'), { preload: 'auto' });
+    soundRefs.current.error   = Object.assign(new Audio('/sounds/Failed.mp3'), { preload: 'auto' });
   }, []);
 
   const playSound = React.useCallback((type) => {
@@ -98,8 +99,7 @@ export default function QrScannerApp() {
     const studentId = String(rawValue || '').trim();
     if (studentId.length <= 2) return;
     if (processingRef.current) return;
-    if (studentId === lastScannedRef.current) {
-      setDebugText(`Duplicate ignored: ${studentId}`);
+    if (studentId === lastScannedRef.current && Date.now() < scanCooldownRef.current) {
       return;
     }
 
@@ -122,6 +122,8 @@ export default function QrScannerApp() {
 
       const { data: student } = await client.from('students').select('*').eq('student_id', studentId).maybeSingle();
       if (!student) {
+        lastScannedRef.current = studentId;
+        scanCooldownRef.current = Date.now() + 3_000;
         playSound('error');
         setErrorView({ title: 'ID Not Found', message: `No record found for: "${studentId}"` });
         setStateView('error');
@@ -133,6 +135,8 @@ export default function QrScannerApp() {
       if (student.valid_until) {
         const today = new Date(dateString);
         if (today > new Date(student.valid_until)) {
+          lastScannedRef.current = studentId;
+          scanCooldownRef.current = Date.now() + 3_000;
           playSound('error');
           setErrorView({ title: 'QR Expired', message: `Expired on ${student.valid_until}. Contact administrator.` });
           setStateView('error');
@@ -144,6 +148,8 @@ export default function QrScannerApp() {
 
       const { data: existing } = await client.from('attendance').select('*').eq('student_id', studentId).eq('scan_date', dateString).maybeSingle();
       if (existing) {
+        lastScannedRef.current = studentId;
+        scanCooldownRef.current = Date.now() + 8_000;
         playSound('already');
         const fullName = `${student.first_name || ''} ${student.last_name || ''}`.trim();
         setAlreadyView({ studentName: fullName || studentId, status: existing.status || '--', time: existing.time_in || '--', date: existing.scan_date || dateString, section: student.section || '--', grade: student.grade_level || '--' });
@@ -174,11 +180,23 @@ export default function QrScannerApp() {
       setStateView('success');
 
       if (student.parent_email) {
-        fetch('/api/send_attendance_email.php', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ parent_email: student.parent_email, student_name: fullName, status, time_in: timeString }) })
-          .then(r => r.json()).then(r => { if (!r.success) console.error('Email failed:', r.error); }).catch(e => console.error('Email error:', e));
+        (async () => {
+          try {
+            const sc = (window as any).supabaseClient;
+            const token = sc ? (await sc.auth.getSession()).data?.session?.access_token : null;
+            const res = await fetch('/api/send_attendance_email.php', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+              body: JSON.stringify({ parent_email: student.parent_email, student_name: fullName, status, time_in: timeString }),
+            });
+            const r = await res.json();
+            if (!r.success) console.error('Email failed:', r.error);
+          } catch (e) { console.error('Email error:', e); }
+        })();
       }
 
       lastScannedRef.current = studentId;
+      scanCooldownRef.current = Date.now() + 10_000;
       queueIdle(5000);
     } catch (err) {
       console.error('Scan error:', err);
@@ -196,7 +214,6 @@ export default function QrScannerApp() {
     resetTimerRef.current = setTimeout(() => {
       setStateView('idle');
       setDebugText('Waiting for scan...');
-      lastScannedRef.current = null;
       setHwPaused(false);
     }, delay);
   }

@@ -48,7 +48,7 @@ async function bootstrap() {
       const flags = entry.slice(lastSlash + 1);
       regexOrigins.push(new RegExp(pattern, flags));
     } else {
-      exactOrigins.push(entry);
+      exactOrigins.push(entry.replace(/\/+$/, ''));
     }
   }
 
@@ -66,9 +66,9 @@ async function bootstrap() {
   });
 
   const port = parseInt(process.env.PORT || '4000', 10);
-  await app.listen(port);
+  await app.listen(port, '0.0.0.0');
 
-  console.log(`E-QRAS backend listening on http://localhost:${port}`);
+  console.log(`E-QRAS backend listening on http://0.0.0.0:${port}`);
 }
 
 bootstrap();

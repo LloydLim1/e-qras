@@ -30,6 +30,7 @@ export default function DashboardLayout({ children }) {
   const [userRole, setUserRole] = useState('Admin');
   const [userProfileImage, setUserProfileImage] = useState<string | null>(null);
   const [advisoryClass, setAdvisoryClass] = useState<string | null>(null);
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   useEffect(() => {
     const syncProfile = () => {
@@ -76,7 +77,8 @@ export default function DashboardLayout({ children }) {
     return nested || filteredNavItems[0];
   }, [pathname, filteredNavItems]);
 
-  async function handleLogout() {
+  async function confirmLogout() {
+    setShowLogoutModal(false);
     const supabase = createClient();
     await supabase.auth.signOut();
     localStorage.removeItem('userRole');
@@ -121,7 +123,7 @@ export default function DashboardLayout({ children }) {
           </nav>
 
           <div className="logout-section animate-on-load" style={{ animationDelay: '0.8s' }}>
-            <button className="logout-button" id="logoutBtn" onClick={handleLogout}>
+            <button className="logout-button" id="logoutBtn" onClick={() => setShowLogoutModal(true)}>
               <svg
                 className="logout-icon"
                 width="24"
@@ -188,6 +190,42 @@ export default function DashboardLayout({ children }) {
           <div className="content-wrapper">{children}</div>
         </main>
       </div>
+
+      {showLogoutModal && (
+        <div
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}
+          onClick={() => setShowLogoutModal(false)}
+        >
+          <div
+            style={{ background: '#fff', borderRadius: '14px', padding: '32px 28px', maxWidth: '360px', width: '90%', boxShadow: '0 10px 40px rgba(0,0,0,0.18)', textAlign: 'center' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ width: 52, height: 52, borderRadius: '50%', background: '#fef2f2', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                <polyline points="16 17 21 12 16 7" />
+                <line x1="21" x2="9" y1="12" y2="12" />
+              </svg>
+            </div>
+            <h3 style={{ fontSize: '18px', fontWeight: 700, color: '#111827', margin: '0 0 8px' }}>Log out?</h3>
+            <p style={{ fontSize: '14px', color: '#6b7280', margin: '0 0 24px' }}>Are you sure you want to end your session?</p>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button
+                onClick={() => setShowLogoutModal(false)}
+                style={{ flex: 1, padding: '10px', border: '1px solid #e5e7eb', borderRadius: '8px', background: '#fff', color: '#374151', fontSize: '14px', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmLogout}
+                style={{ flex: 1, padding: '10px', border: 'none', borderRadius: '8px', background: '#dc2626', color: '#fff', fontSize: '14px', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
+              >
+                Log out
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
