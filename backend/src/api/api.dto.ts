@@ -340,6 +340,30 @@ export class UpdateUserEmailDto {
   email!: string;
 }
 
+export class SendReportEmailDto {
+  @IsEmail()
+  teacher_email!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(120)
+  teacher_name!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(120)
+  section!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(20)
+  month!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  csv_content!: string;
+}
+
 // ─── Pre-login auth DTOs ──────────────────────────────────────────────────────
 
 export class LookupEmailDto {

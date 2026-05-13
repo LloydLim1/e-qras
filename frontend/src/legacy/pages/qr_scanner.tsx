@@ -180,8 +180,19 @@ export default function QrScannerApp() {
       setStateView('success');
 
       if (student.parent_email) {
-        fetch('/api/send_attendance_email.php', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ parent_email: student.parent_email, student_name: fullName, status, time_in: timeString }) })
-          .then(r => r.json()).then(r => { if (!r.success) console.error('Email failed:', r.error); }).catch(e => console.error('Email error:', e));
+        (async () => {
+          try {
+            const sc = (window as any).supabaseClient;
+            const token = sc ? (await sc.auth.getSession()).data?.session?.access_token : null;
+            const res = await fetch('/api/send_attendance_email.php', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+              body: JSON.stringify({ parent_email: student.parent_email, student_name: fullName, status, time_in: timeString }),
+            });
+            const r = await res.json();
+            if (!r.success) console.error('Email failed:', r.error);
+          } catch (e) { console.error('Email error:', e); }
+        })();
       }
 
       lastScannedRef.current = studentId;

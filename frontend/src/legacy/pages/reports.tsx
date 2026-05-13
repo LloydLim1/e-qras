@@ -4,6 +4,26 @@ import { createClient } from '@/utils/supabase/client';
 
 const { useEffect, useMemo, useRef, useState } = React;
 
+// ─── Authenticated fetch helper ───────────────────────────────────────────────
+async function apiFetch(path: string, options: RequestInit = {}) {
+    const supabase = createClient();
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token;
+    const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(options.headers as Record<string, string> || {}),
+    };
+    const res = await fetch(path, { ...options, headers });
+    let data: any = null;
+    try { data = await res.json(); } catch (_) {}
+    if (!res.ok) {
+        const message = (data && (data.error || data.message)) || `Request failed (${res.status})`;
+        throw new Error(message);
+    }
+    return data || {};
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function formatLocalDate(date) {
@@ -611,9 +631,8 @@ export default function ReportsApp() {
             const csvContent = generateCsvContent();
             const base64 = btoa(unescape(encodeURIComponent(csvContent)));
 
-            const res = await fetch('/api/send-report-email', {
+            await apiFetch('/api/send-report-email', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     teacher_email: activeSectionInfo.adviserEmail,
                     teacher_name: activeSectionInfo.adviser,
@@ -623,12 +642,7 @@ export default function ReportsApp() {
                 })
             });
 
-            const data = await res.json();
-            if (data.success) {
-                setEmailStatus({ type: 'success', msg: `Report sent to ${activeSectionInfo.adviser} (${activeSectionInfo.adviserEmail}).` });
-            } else {
-                setEmailStatus({ type: 'error', msg: data.error || 'Failed to send email.' });
-            }
+            setEmailStatus({ type: 'success', msg: `Report sent to ${activeSectionInfo.adviser} (${activeSectionInfo.adviserEmail}).` });
         } catch (err) {
             setEmailStatus({ type: 'error', msg: err.message || 'Failed to send email.' });
         } finally {
